@@ -1,0 +1,44 @@
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix schema: <http://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+
+<sheldon-cooper> a foaf:Person ;
+	foaf:name "Sheldon Cooper"@en ;
+	foaf:familyName "Cooper"@en ;
+	foaf:firstName "Sheldon"@en ;
+	schema:parent <mary-cooper> ;
+	foaf:knows <leonard-hofstadter> ;
+	rdfs:seeAlso <http://www.wikidata.org/entity/Q629583> ;
+	schema:byArtist <jim-parsons> .
+
+<mary-cooper> a foaf:Person ;
+	foaf:name "Mary Cooper"@en ;
+	foaf:familyName "Cooper"@en ;
+	foaf:firstName "Mary"@en ;
+	schema:children <sheldon-cooper> ;
+	rdfs:seeAlso <http://www.wikidata.org/entity/Q56322967> ;
+	schema:byArtist <laurie-metcalf> .
+
+<leonard-hofstadter> a foaf:Person ;
+	foaf:name "Leonard"@en ;
+	foaf:familyName "Hofstadter"@en ;
+	foaf:firstName "Leonard"@en ;
+	foaf:knows <mary-cooper> ;
+	rdfs:seeAlso <http://www.wikidata.org/entity/Q512382> ;
+	schema:byArtist <johnny-galecki> .
+
+<jim-parsons> a foaf:Person ;
+	schema:name "Jim Parsons"@en ;
+	rdfs:isDefinedBy <http://www.wikidata.org/entity/Q190972> .
+
+<laurie-metcalf> a foaf:Person ;
+	schema:name "Laurie Metcalf"@en ;
+	rdfs:isDefinedBy <http://www.wikidata.org/entity/Q236711> .
+
+<johnny-galecki> a foaf:Person ;
+	schema:name "Johnny Galecki"@en ;
+	rdfs:isDefinedBy <http://www.wikidata.org/entity/Q295739> .
+
+

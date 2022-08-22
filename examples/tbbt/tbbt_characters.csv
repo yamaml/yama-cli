@@ -1,0 +1,4 @@
+ID,wikidata,name,familyName,firstName,jobTitle,parents,children,knows,byArtist,street,locality,region,country,postalCode
+sheldon-cooper,Q629583,Sheldon Cooper,Cooper,Sheldon,Theoretical physicist,mary-cooper,,leonard-hofstadter,jim-parsons,"2311 North Los Robles Avenue, Apartment 4A",Pasadena,CA,US,91104
+mary-cooper,Q56322967,Mary Cooper,Cooper,Mary,,,sheldon-cooper,,laurie-metcalf,,,TX,US,
+leonard-hofstadter,Q512382,Leonard,Hofstadter,Leonard,Experimental physicist,,,"sheldon-cooper,mary-cooper",johnny-galecki,"2311 North Los Robles Avenue, Apartment 4A",Pasadena,CA,US,91104

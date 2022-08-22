@@ -1,0 +1,233 @@
+%YAML 1.2
+---
+base: http://purl.org/yama/examples/2022/tbbt/0.1/
+
+namespaces:
+  foaf: http://xmlns.com/foaf/0.1/
+  schema: http://schema.org/
+  xsd: http://www.w3.org/2001/XMLSchema#
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+
+defaults:
+  mapping:
+    source: tbbt_characters.csv
+    type: csv
+
+descriptions:
+  # Character
+  character:
+    a: foaf:Person
+    label: Character
+    note: Details of the character
+    id:
+      mapping:
+        source: tbbt_characters.csv
+        type: csv
+        path: ID
+
+    # Statements in character
+    statements:
+      # Name of the character
+      name:
+        label: Name
+        property: foaf:name
+        min: 1
+        max: 1
+        note: Name of the character
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: name
+
+      # Family name of the character
+      familyName:
+        label: Family Name
+        property: foaf:familyName
+        min: 1
+        max: 1
+        note: Family Name of the character
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: familyName
+
+      # First name of the character
+      firstName:
+        label: First Name
+        property: foaf:firstName
+        min: 1
+        max: 1
+        note: Firts Name of the character
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: firstName
+
+      # Additional name of the character
+      additionalName:
+        label: Additional Name
+        property: schema:additionalName
+        min: 0
+        max: 1
+        note: First Name of the character
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: additionalName
+
+      # Job Title
+      jobTitle:
+        label: Job Title
+        property: schema:jobTitle
+        min: 0
+        max: 1
+        note: Job title of the character
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: additionalName
+
+      # Parents
+      parents:
+        label: Parents
+        property: schema:parent
+        min: 0
+        note: Parents of the character
+        type: IRI
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: parents
+
+      # Children
+      children:
+        label: Children
+        property: schema:children
+        min: 0
+        note: Children of the character
+        type: IRI
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: children
+
+      # Knows
+      knows:
+        label: Knows
+        property: foaf:knows
+        min: 0
+        note: This character knows these other characters
+        type: IRI
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: knows
+          seperator: ","
+
+      wikidata:
+        label: Wikidata
+        property: rdfs:seeAlso
+        type: IRI
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: wikidata
+          prepend: http://www.wikidata.org/entity/
+
+      # This character is portrayed by
+      byArtist:
+        label: Portrayed by
+        property: schema:byArtist
+        type: IRI
+        note: This character is portrayed by
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: byArtist
+
+  # Description - Address
+  address:
+    # Statements in address
+    statements:
+      street:
+        label: Street
+        property: schema:streetAddress
+        note: Building and street address
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: street
+
+      locality:
+        label: Locality
+        property: schema:addressLocality
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: locality
+
+      region:
+        label: State
+        property: schema:addressRegion
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: region
+
+      country:
+        label: Country
+        property: schema:addressRegion
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: country
+
+      postalCode:
+        label: Postal Code
+        property: schema:postalCode
+        mapping:
+          source: tbbt_characters.csv
+          type: csv
+          path: postalCode
+
+  # Description - Artist
+  artist:
+    # Statements in address
+    a: foaf:Person
+    label: Character
+    note: Details of the character
+    id:
+      mapping:
+        source: tbbt_actors.csv
+        type: csv
+        path: ID
+
+    statements:
+      name:
+        label: Name
+        property: schema:name
+        note: Name of Artist
+        mapping:
+          source: tbbt_actors.csv
+          type: csv
+          path: name
+
+      wikidata:
+        label: Age
+        property: rdfs:isDefinedBy
+        type: IRI
+        mapping:
+          source: tbbt_actors.csv
+          type: csv
+          path: wikidata
+          prepend: http://www.wikidata.org/entity/
