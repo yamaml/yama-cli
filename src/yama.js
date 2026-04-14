@@ -1,3 +1,4 @@
+/// <reference types="./yama.d.ts" />
 /**
  * @fileoverview YAMA CLI entry point.
  *
