@@ -47,7 +47,7 @@ import { importSHACL } from "./modules/from-shacl.js";
 import { importShEx } from "./modules/from-shex.js";
 import { generateVocab } from "./modules/vocab.js";
 
-const VERSION = "0.2.0";
+const VERSION = "1.0.0";
 
 // ---------------------------------------------------------------------------
 // Argument parsing — short flags with long aliases
