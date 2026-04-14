@@ -1,22 +1,48 @@
 # yama-cli
 
+[![JSR](https://jsr.io/badges/@nishad/yama)](https://jsr.io/@nishad/yama)
+[![JSR Score](https://jsr.io/badges/@nishad/yama/score)](https://jsr.io/@nishad/yama)
+
 A CLI toolkit for working with [YAMAML](https://docs.yamaml.org/specs/yamaml/spec/) application profiles. Converts between YAMA, SimpleDSP, DCTAP, SHACL, ShEx, OWL-DSP, RDF, Frictionless Data Packages, and more — with validation, documentation generation, and diagram rendering.
 
-## Requirements
+## Install
 
-- [Deno](https://deno.land) v2.0+
+Published on [JSR](https://jsr.io/@nishad/yama) as `@nishad/yama`.
 
-## Quick Start
+### As a global binary (recommended)
 
 ```bash
-# Install / run directly
-deno run --allow-read --allow-write --allow-env --allow-net src/yama.js <command> [options]
+deno install --global --allow-read --allow-write --allow-env --allow-net --name yama jsr:@nishad/yama
+```
 
-# Or via task runner
+Then use `yama` anywhere:
+
+```bash
+yama validate -i profile.yaml
+```
+
+### Run directly without installing
+
+```bash
+deno run --allow-read --allow-write --allow-env --allow-net jsr:@nishad/yama <command> [options]
+```
+
+### Pin a specific version
+
+```bash
+deno run -A jsr:@nishad/yama@1.0.0 validate -i profile.yaml
+```
+
+### From source (for development)
+
+```bash
+git clone https://github.com/yamaml/yama-cli && cd yama-cli
 deno task start <command> [options]
 ```
 
-### Common workflows
+**Requirements:** [Deno](https://deno.land) v2.0+
+
+## Quick Start
 
 ```bash
 # Create a new profile
@@ -237,11 +263,14 @@ yama report --help         # Also works
 yama --help                # Main help with examples
 ```
 
-## Compile to Binary
+## Compile to a Standalone Binary
+
+For air-gapped environments or distribution without a Deno runtime:
 
 ```bash
+git clone https://github.com/yamaml/yama-cli && cd yama-cli
 deno task compile
-# Produces ./yama binary
+# Produces ./yama — a self-contained executable
 ```
 
 ## Supported Formats
@@ -278,7 +307,7 @@ deno task compile
 
 ## SimpleDSP
 
-SimpleDSP is a tab-separated text format for defining metadata description rules (Description Set Profiles), originally specified by the Metadata Infrastructure Cooperative Association (Japan) as part of the [MetaBridge](https://metabridge.jp/) platform.
+SimpleDSP is a tab-separated text format for defining metadata description rules (Description Set Profiles), originally specified circa 2011 under the *Metadata Information Infrastructure Construction Project* (メタデータ情報基盤構築事業) and subsequently carried on by the [Metadata Information Infrastructure Initiative (MI3)](https://web.archive.org/web/20200209202846/http://mi3.or.jp/) (メタデータ基盤協議会, Japan) as part of the [MetaBridge](https://metabridge.jp/) registry.
 
 YAMA CLI supports full bidirectional conversion between YAMA and SimpleDSP in TSV, CSV, and Excel formats. Both English and Japanese column headers and value type names are supported.
 
@@ -332,7 +361,9 @@ CLI-specific documentation lives in [`docs/`](docs/).
 ## Links
 
 - Website: [yamaml.org](https://www.yamaml.org)
-- Tapir Editor: [Browser-based visual editor](https://yamaml.github.io/tapir/)
+- Documentation: [docs.yamaml.org](https://docs.yamaml.org)
+- JSR package: [@nishad/yama](https://jsr.io/@nishad/yama)
+- Tapir editor (browser-based): [yamaml.github.io/tapir](https://yamaml.github.io/tapir/)
 
 ## License
 
