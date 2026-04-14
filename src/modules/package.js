@@ -257,7 +257,7 @@ Application profile package generated with [YAMA](https://www.yamaml.org).
 
 ## Generated
 
-${date} with YAMA v1.0.0
+${date} with YAMA v1.0.1
 `;
 }
 
