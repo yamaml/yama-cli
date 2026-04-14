@@ -29,7 +29,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // ShExC serialization helpers
@@ -88,9 +88,13 @@ function formatCardinality(min, max) {
 function formatNodeConstraint(stmt) {
   const parts = [];
 
-  // Shape reference takes precedence as the "node constraint"
-  if (stmt.description) {
-    parts.push(`@<${stmt.description}>`);
+  // Shape reference(s) take precedence. Multi-shape becomes a
+  // parenthesised disjunction using ShEx's OR operator.
+  const refs = descRefs(stmt);
+  if (refs.length === 1) {
+    parts.push(`@<${refs[0]}>`);
+  } else if (refs.length > 1) {
+    parts.push(`(${refs.map((r) => `@<${r}>`).join(" OR ")})`);
   } else if (stmt.datatype) {
     // Datatype constraint (already prefixed in YAMA, e.g. "xsd:string")
     parts.push(stmt.datatype);

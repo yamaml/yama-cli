@@ -383,10 +383,28 @@ function parseShaclToYama(turtleText) {
           }
         }
 
-        // sh:node → description (shape reference)
+        // sh:node → description (single shape reference)
         const nodeRef = getOne(index, propNodeIRI, `${SH}node`);
         if (nodeRef) {
           stmt.description = localName(nodeRef, base);
+        }
+
+        // sh:or with an RDF list of nested sh:node blank nodes →
+        // description (multi-shape disjunction). Matches the form
+        // emitted by the shacl.js generator for multi-ref statements.
+        // Nested/complex sh:or (e.g. containing sh:datatype) is imported
+        // as a best-effort list of shape names only.
+        const orHead = getOne(index, propNodeIRI, `${SH}or`);
+        if (orHead) {
+          const entries = walkRdfList(index, orHead);
+          const refs = [];
+          for (const entry of entries) {
+            const nested = getOne(index, entry, `${SH}node`);
+            if (nested) refs.push(localName(nested, base));
+          }
+          if (refs.length > 0) {
+            stmt.description = refs.length === 1 ? refs[0] : refs;
+          }
         }
 
         // sh:class → a (class constraint on statement)

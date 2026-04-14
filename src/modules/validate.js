@@ -10,7 +10,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 
 // ── Standard prefixes (Table 19 from spec + schema: extension) ──
 
@@ -211,16 +211,19 @@ export function validateYamaDocument(doc, filePath, sourceFormat = "yaml") {
         checkPrefix(stmtDef.datatype, namespaces, { path: `${stmtPath}.datatype` }, "datatype", errors, sourceFormat, info);
       }
 
-      // Description reference
-      if (stmtDef.description && !descNames.includes(stmtDef.description)) {
-        errors.push(msg("error",
-          `Statement "${stmtKey}" references undefined description "${stmtDef.description}"`,
-          `Available descriptions: ${descNames.join(", ")}`,
-          { path: `${stmtPath}.description` }));
+      // Description reference(s) — each ref in the list must resolve
+      const stmtRefs = descRefs(stmtDef);
+      for (const ref of stmtRefs) {
+        if (!descNames.includes(ref)) {
+          errors.push(msg("error",
+            `Statement "${stmtKey}" references undefined description "${ref}"`,
+            `Available descriptions: ${descNames.join(", ")}`,
+            { path: `${stmtPath}.description` }));
+        }
       }
 
       // Track value types for summary
-      const vt = stmtDef.description ? "structured" :
+      const vt = stmtRefs.length > 0 ? "structured" :
         (stmtDef.type || "").toUpperCase() === "IRI" || (stmtDef.type || "").toUpperCase() === "URI" ? "iri" :
         stmtDef.datatype || stmtDef.type === "literal" ? "literal" : "unconstrained";
       valueTypes[vt] = (valueTypes[vt] || 0) + 1;
@@ -450,13 +453,17 @@ export function validateDctapRaw(rows, filePath) {
         { line }));
     }
 
-    // valueShape reference check
+    // valueShape reference check. DCTAP spec says "zero or one"; DCMI
+    // SRAP uses space-separated multi-shape — we validate each entry.
     if (row.valueShape) {
-      if (!shapeIds.has(row.valueShape)) {
-        errors.push(msg("error",
-          `Row ${line}: valueShape "${row.valueShape}" does not match any shapeID`,
-          `Available shapes: ${[...shapeIds].join(", ") || "(none)"}`,
-          { line }));
+      const refs = String(row.valueShape).trim().split(/\s+/).filter(Boolean);
+      for (const ref of refs) {
+        if (!shapeIds.has(ref)) {
+          errors.push(msg("error",
+            `Row ${line}: valueShape "${ref}" does not match any shapeID`,
+            `Available shapes: ${[...shapeIds].join(", ") || "(none)"}`,
+            { line }));
+        }
       }
       // valueShape with literal nodeType
       if (row.valueNodeType && row.valueNodeType.toLowerCase() === "literal") {

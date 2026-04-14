@@ -212,11 +212,23 @@ function parseTripleConstraint(line) {
 
   // Parse the remaining node constraint
 
+  // Multi-shape disjunction: (@<A> OR @<B> OR ...)
+  // This extended form is emitted by shex.js for multi-ref statements;
+  // strict ShExC would use a group expression but we keep the serialiser
+  // symmetric by parsing the same form back.
+  const disjMatch = rest.match(/^\(\s*((?:@<[^>]+>\s*OR\s*)+@<[^>]+>)\s*\)(.*)/);
+  if (disjMatch) {
+    const refs = Array.from(disjMatch[1].matchAll(/@<([^>]+)>/g)).map((m) => m[1]);
+    stmt.description = refs.length === 1 ? refs[0] : refs;
+    rest = disjMatch[2].trim();
+  }
   // Shape reference: @<shapeName>
-  const shapeRefMatch = rest.match(/^@<([^>]+)>(.*)/);
-  if (shapeRefMatch) {
-    stmt.description = shapeRefMatch[1];
-    rest = shapeRefMatch[2].trim();
+  else if (/^@<[^>]+>/.test(rest)) {
+    const shapeRefMatch = rest.match(/^@<([^>]+)>(.*)/);
+    if (shapeRefMatch) {
+      stmt.description = shapeRefMatch[1];
+      rest = shapeRefMatch[2].trim();
+    }
   }
   // Value set: ["val1" "val2"]
   else if (rest.startsWith("[")) {

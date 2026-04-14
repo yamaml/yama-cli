@@ -34,7 +34,7 @@
  * | max absent or max > 1        | repeatable = TRUE                   |
  * | statement.type               | valueNodeType (IRI, literal, bnode) |
  * | statement.datatype           | valueDataType                       |
- * | statement.description        | valueShape                          |
+ * | statement.description        | valueShape (space-separated if list) |
  * | statement.values             | valueConstraint (picklist)          |
  * | statement.inScheme           | valueConstraint (IRIstem)           |
  * | statement.pattern            | valueConstraint (pattern)           |
@@ -325,7 +325,11 @@ function yamaToRows(doc) {
         valueDataType: stmtDef.datatype || "",
         valueConstraint,
         valueConstraintType,
-        valueShape: stmtDef.description || "",
+        // DCTAP valueShape: single or space-separated multi-shape (SRAP convention).
+        // stmtDef.description may be a scalar or an array in YAMAML.
+        valueShape: Array.isArray(stmtDef.description)
+          ? stmtDef.description.join(" ")
+          : (stmtDef.description || ""),
         note: stmtDef.note || "",
       });
     }
@@ -540,8 +544,13 @@ export function rowsToYama(rows) {
     if (repeatable != null) stmt.max = repeatable ? -1 : 1;
     if (stmt.max === -1) delete stmt.max;
 
+    // DCTAP valueShape: spec cardinality is "zero or one", but DCMI SRAP
+    // uses space-separated multi-shape in practice. We preserve both.
     const valueShape = String(row.valueShape || "").trim();
-    if (valueShape) stmt.description = valueShape;
+    if (valueShape) {
+      const refs = valueShape.split(/\s+/).filter(Boolean);
+      stmt.description = refs.length === 1 ? refs[0] : refs;
+    }
 
     const constraints = fromValueConstraint(
       row.valueConstraint || "",

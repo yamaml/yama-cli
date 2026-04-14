@@ -25,7 +25,8 @@
  * | statement.type (IRI)    | sh:nodeKind sh:IRI           |
  * | statement.type (literal)| sh:nodeKind sh:Literal       |
  * | statement.type (BNODE)  | sh:nodeKind sh:BlankNodeOrIRI|
- * | statement.description   | sh:node (shape reference)    |
+ * | statement.description (single) | sh:node (shape reference)    |
+ * | statement.description (many)   | sh:or ([sh:node ... ])       |
  * | statement.facets.MinInclusive | sh:minInclusive        |
  * | statement.facets.MaxInclusive | sh:maxInclusive        |
  * | statement.pattern       | sh:pattern                   |
@@ -38,7 +39,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -79,6 +80,7 @@ const SH_LITERAL          = namedNode(`${SH}Literal`);
 const SH_BLANK_NODE_OR_IRI = namedNode(`${SH}BlankNodeOrIRI`);
 const SH_CLOSED           = namedNode(`${SH}closed`);
 const SH_IGNORED_PROPERTIES = namedNode(`${SH}ignoredProperties`);
+const SH_OR               = namedNode(`${SH}or`);
 
 const RDF_TYPE             = namedNode(`${RDF}type`);
 const RDF_FIRST            = namedNode(`${RDF}first`);
@@ -226,10 +228,22 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
     }
   }
 
-  // sh:node — reference to another shape
-  if (stmtDef.description) {
-    const refIri = base ? base + stmtDef.description : stmtDef.description;
+  // sh:node — reference to another shape. Multi-shape becomes sh:or
+  // with a list of nested sh:node blank nodes, following SHACL's
+  // disjunction idiom.
+  const refs = descRefs(stmtDef);
+  if (refs.length === 1) {
+    const refIri = base ? base + refs[0] : refs[0];
     quads.push(quad(propNode, SH_NODE, namedNode(refIri)));
+  } else if (refs.length > 1) {
+    const nodeAnons = refs.map((r) => {
+      const anon = blankNode();
+      const refIri = base ? base + r : r;
+      quads.push(quad(anon, SH_NODE, namedNode(refIri)));
+      return anon;
+    });
+    const listHead = buildRdfList(nodeAnons, quads);
+    quads.push(quad(propNode, SH_OR, listHead));
   }
 
   // Facets

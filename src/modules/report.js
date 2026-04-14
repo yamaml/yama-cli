@@ -16,6 +16,8 @@
  * @module report
  */
 
+import { descRefs } from "./io.js";
+
 // ---------------------------------------------------------------------------
 // Standard prefix table (mirrors dsp.js STANDARD_PREFIXES)
 // ---------------------------------------------------------------------------
@@ -174,7 +176,8 @@ function resolveType(stmtDef, namespaces) {
  * @returns {string}
  */
 function resolveConstraint(stmtDef, namespaces) {
-  if (stmtDef.description) return stmtDef.description;
+  const refs = descRefs(stmtDef);
+  if (refs.length > 0) return refs.join(", ");
   if (stmtDef.a) {
     const classes = Array.isArray(stmtDef.a) ? stmtDef.a : [stmtDef.a];
     return classes.join(", ");
@@ -367,13 +370,18 @@ export function generateHtmlReport(doc, svgDiagram, filePath, flavor) {
           ? `<a href="${escHtml(propertyIri)}"><code>${escHtml(property)}</code></a>`
           : `<code>${escHtml(property)}</code>`;
 
-        // Constraint cell: shape references link internally, others are plain
+        // Constraint cell: shape references link internally, others are plain.
+        // Multi-shape disjunctions render as comma-separated internal links.
         let constraintCell;
-        if (stmtDef.description && descNames.includes(stmtDef.description)) {
-          const refDef = descriptions[stmtDef.description];
-          const refLabel = refDef.label || stmtDef.description;
-          const refSlug = descSlug(stmtDef.description);
-          constraintCell = `<a href="#desc-${refSlug}">&rarr; ${escHtml(refLabel)}</a>`;
+        const stmtRefs = descRefs(stmtDef);
+        const knownRefs = stmtRefs.filter((r) => descNames.includes(r));
+        if (knownRefs.length > 0) {
+          const links = knownRefs.map((r) => {
+            const refDef = descriptions[r];
+            const refLabel = (refDef && refDef.label) || r;
+            return `<a href="#desc-${descSlug(r)}">&rarr; ${escHtml(refLabel)}</a>`;
+          });
+          constraintCell = links.join(", ");
         } else if (constraint) {
           constraintCell = `<code>${escHtml(constraint)}</code>`;
         } else {
@@ -539,13 +547,17 @@ export function generateMarkdownReport(doc, filePath, flavor) {
           ? `[\`${property}\`](${propertyIri})`
           : `\`${property}\``;
 
-        // Constraint: shape references link internally
+        // Constraint: shape references link internally; multi-shape
+        // disjunctions render as comma-separated links.
         let constraintMd;
-        if (stmtDef.description && descNames.includes(stmtDef.description)) {
-          const refDef = descriptions[stmtDef.description];
-          const refLabel = refDef.label || stmtDef.description;
-          const refSlug = descSlug(stmtDef.description);
-          constraintMd = `[→ ${refLabel}](#${refSlug})`;
+        const stmtRefs = descRefs(stmtDef);
+        const knownRefs = stmtRefs.filter((r) => descNames.includes(r));
+        if (knownRefs.length > 0) {
+          constraintMd = knownRefs.map((r) => {
+            const refDef = descriptions[r];
+            const refLabel = (refDef && refDef.label) || r;
+            return `[→ ${refLabel}](#${descSlug(r)})`;
+          }).join(", ");
         } else if (constraint) {
           constraintMd = `\`${constraint}\``;
         } else {

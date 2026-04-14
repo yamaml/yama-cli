@@ -353,10 +353,16 @@ async function processStatement(subject, stmtDef, idColumn, idValue, ctx, quads)
   const stmtType = (stmtDef.type || "literal");
   const mapping = mergeMapping(stmtDef.mapping, ctx.defaults);
 
-  // Blank node: recurse into referenced description
-  if (stmtType.toUpperCase() === "BNODE" && stmtDef.description) {
+  // Blank node: recurse into referenced description. When multiple
+  // descriptions are listed (disjunction in the profile), we can only
+  // generate one concrete blank node per row; we pick the first ref
+  // since instance-data generation is one-shot, not disjunctive.
+  const bnodeRef = Array.isArray(stmtDef.description)
+    ? stmtDef.description[0]
+    : stmtDef.description;
+  if (stmtType.toUpperCase() === "BNODE" && bnodeRef) {
     const bnodeResult = await buildBlankNode(
-      stmtDef.description, idValue, idColumn, ctx,
+      bnodeRef, idValue, idColumn, ctx,
     );
     if (bnodeResult.quads.length > 0) {
       quads.push(quad(subject, namedNode(predIri), bnodeResult.node));

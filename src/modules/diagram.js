@@ -20,7 +20,7 @@ import { parse as parseYaml } from "@std/yaml";
 import { Graphviz } from "@hpcc-js/wasm-graphviz";
 import { extname } from "@std/path";
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 
 // ── Color palette ─────────────────────────────────────────────────
 
@@ -109,7 +109,8 @@ function formatCard(min, max) {
 }
 
 function typeLabel(stmtDef, ns) {
-  if (stmtDef.description) return stmtDef.description;
+  const refs = descRefs(stmtDef);
+  if (refs.length > 0) return refs.join(" ");
   if (stmtDef.datatype) return compactIRI(stmtDef.datatype, ns);
   if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "URI";
   if (stmtDef.type === "literal") return "Literal";
@@ -129,7 +130,7 @@ function buildDot(doc, { mode = "color" } = {}) {
   const hasEdges = descNames.some((name) => {
     const stmts = descriptions[name].statements || {};
     return Object.values(stmts).some(
-      (s) => s.description && s.description !== name && descNames.includes(s.description),
+      (s) => descRefs(s).some((r) => r !== name && descNames.includes(r)),
     );
   });
 
@@ -184,12 +185,14 @@ function buildDot(doc, { mode = "color" } = {}) {
       const type = typeLabel(stmtDef, ns);
       const rowBg = si % 2 === 1 ? pal.stripeBg : pal.bodyBg;
 
-      const isRef = stmtDef.description && descNames.includes(stmtDef.description);
-      const isSelfRef = isRef && stmtDef.description === descName;
+      const stmtRefs = descRefs(stmtDef);
+      const resolvedRefs = stmtRefs.filter((r) => descNames.includes(r));
+      const hasRef = resolvedRefs.length > 0;
+      const isSelfRef = resolvedRefs.length === 1 && resolvedRefs[0] === descName;
       let typeCell;
       if (isSelfRef) {
         typeCell = `<FONT COLOR="${pal.selfRefText}" POINT-SIZE="9"><B>&#x21BA; ${esc(type)}</B></FONT>`;
-      } else if (isRef) {
+      } else if (hasRef) {
         typeCell = `<FONT COLOR="${pal.refText}" POINT-SIZE="9"><B>&#x2192; ${esc(type)}</B></FONT>`;
       } else {
         typeCell = `<FONT COLOR="${pal.typeText}" POINT-SIZE="9">${esc(type)}</FONT>`;
@@ -202,11 +205,13 @@ function buildDot(doc, { mode = "color" } = {}) {
       label += `<TD BGCOLOR="${rowBg}" CELLPADDING="2" WIDTH="2" PORT="${esc(stmtKey)}"></TD>`;
       label += "</TR>\n";
 
-      if (isRef && !isSelfRef) {
+      // One edge per cross-reference; self-refs are rendered separately.
+      for (const ref of resolvedRefs) {
+        if (ref === descName) continue;
         edges.push({
           from: descName,
           fromPort: stmtKey,
-          to: stmtDef.description,
+          to: ref,
           card,
           prop: propName,
         });
@@ -248,13 +253,14 @@ function buildOverviewDot(doc, { mode = "color" } = {}) {
   const descriptions = doc.descriptions || {};
   const descNames = Object.keys(descriptions);
 
-  // Pre-collect self-refs per description
+  // Pre-collect self-refs per description (a statement may name its own
+  // description among several refs)
   const selfRefs = {};
   for (const descName of descNames) {
     selfRefs[descName] = [];
     const stmts = descriptions[descName].statements || {};
     for (const [stmtKey, stmtDef] of Object.entries(stmts)) {
-      if (stmtDef.description === descName) {
+      if (descRefs(stmtDef).includes(descName)) {
         const propName = compactIRI(stmtDef.property, ns) || stmtKey;
         const card = formatCard(stmtDef.min, stmtDef.max);
         selfRefs[descName].push({ prop: propName, card });
@@ -305,17 +311,20 @@ function buildOverviewDot(doc, { mode = "color" } = {}) {
     lines.push(`  "${dotEsc(descName)}" [label=${label}];`);
     lines.push("");
 
-    // Collect cross-references, merging duplicates to same target
+    // Collect cross-references, merging duplicates to the same target.
+    // A multi-ref statement produces one edge per target description.
     const stmts = descDef.statements || {};
     for (const [stmtKey, stmtDef] of Object.entries(stmts)) {
-      if (stmtDef.description && stmtDef.description !== descName && descNames.includes(stmtDef.description)) {
+      for (const ref of descRefs(stmtDef)) {
+        if (ref === descName) continue;
+        if (!descNames.includes(ref)) continue;
         const propName = compactIRI(stmtDef.property, ns) || stmtKey;
         const card = formatCard(stmtDef.min, stmtDef.max);
-        const key = `${descName}->${stmtDef.description}`;
+        const key = `${descName}->${ref}`;
         if (edgeMap.has(key)) {
           edgeMap.get(key).labels.push(`${propName}  [${card}]`);
         } else {
-          const entry = { from: descName, to: stmtDef.description, labels: [`${propName}  [${card}]`] };
+          const entry = { from: descName, to: ref, labels: [`${propName}  [${card}]`] };
           edgeMap.set(key, entry);
           edges.push(entry);
         }

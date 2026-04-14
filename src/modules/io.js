@@ -42,3 +42,22 @@ export async function readInputBytes(path) {
   }
   return Deno.readFile(path);
 }
+
+/**
+ * Normalises a YAMAML statement's `description` field into an array of
+ * shape-reference names.
+ *
+ * YAMAML accepts `description:` as a scalar (single ref) or an array
+ * (multi-shape disjunction). Internally the CLI treats the array form
+ * as canonical; this helper hides the scalar-or-list detail from call
+ * sites that just want "the shape refs, if any".
+ *
+ * @param {{ description?: string | string[] | null | undefined }} stmtDef
+ * @returns {string[]} Non-empty array of ref names, or empty when none.
+ */
+export function descRefs(stmtDef) {
+  const d = stmtDef?.description;
+  if (!d) return [];
+  if (Array.isArray(d)) return d.filter((r) => typeof r === "string" && r.length > 0);
+  return typeof d === "string" && d.length > 0 ? [d] : [];
+}

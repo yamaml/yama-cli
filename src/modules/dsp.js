@@ -55,7 +55,7 @@ import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import * as XLSX from "xlsx";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { readInput, readInputBytes } from "./io.js";
+import { descRefs, readInput, readInputBytes } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -205,9 +205,9 @@ function buildRdfList(items, quads) {
  * @returns {string}
  */
 function resolveSimpleDspValueType(stmtDef) {
-  if (stmtDef.description) return "structured";
+  if (descRefs(stmtDef).length > 0) return "structured";
   // Structured with class constraint (e.g. foaf:Agent) — per spec Table 17
-  if (stmtDef.a && !stmtDef.description) return "structured";
+  if (stmtDef.a) return "structured";
   const type = (stmtDef.type || "").toUpperCase();
   if (type === "IRI" || type === "URI") return "IRI";
   if (type === "LITERAL" || stmtDef.datatype || Array.isArray(stmtDef.values)) {
@@ -224,9 +224,13 @@ function resolveSimpleDspValueType(stmtDef) {
  * @returns {string}
  */
 function resolveSimpleDspConstraint(stmtDef, namespaces) {
-  // Structured: shape reference
-  if (stmtDef.description) {
-    return `#${stmtDef.description}`;
+  // Structured: shape reference(s). SimpleDSP spec has no disjunction
+  // syntax — we emit space-separated `#A #B` as a yama-cli extension so
+  // multi-shape profiles at least round-trip through SimpleDSP when
+  // consumed by yama-cli itself. Strict consumers read the first ref.
+  const refs = descRefs(stmtDef);
+  if (refs.length > 0) {
+    return refs.map((r) => `#${r}`).join(" ");
   }
 
   // Structured: class constraint (e.g. foaf:Agent) — per spec Table 17
@@ -625,8 +629,16 @@ export function simpleDspToYama(blocks, parsedNs) {
           break;
         case "structured":
           if (constraint.startsWith("#")) {
-            // Reference to another block in the same file: #blockId
-            stmt.description = constraint.slice(1);
+            // Reference(s) to another block in the same file. Accept the
+            // spec's single `#blockId` as well as the yama-cli multi-ref
+            // extension `#A #B` so multi-shape profiles survive a
+            // SimpleDSP round-trip.
+            const refs = constraint
+              .split(/\s+/)
+              .filter((s) => s.startsWith("#"))
+              .map((s) => s.slice(1))
+              .filter(Boolean);
+            stmt.description = refs.length === 1 ? refs[0] : refs;
           } else if (constraint) {
             // Class name(s) — value is instance of that class (e.g. foaf:Agent).
             // Per spec Table 17, multiple classes may be space-separated.
@@ -960,14 +972,21 @@ function buildStatementTemplate(
     }
   }
 
-  // Value type: structured → owl:onClass (shape reference)
-  if (stmtDef.description) {
-    const refIri = base ? base + stmtDef.description : stmtDef.description;
+  // Value type: structured → owl:onClass (shape reference(s))
+  const shapeRefs = descRefs(stmtDef);
+  if (shapeRefs.length === 1) {
+    const refIri = base ? base + shapeRefs[0] : shapeRefs[0];
     quads.push(quad(stmtNode, OWL_ON_CLASS, namedNode(refIri)));
+  } else if (shapeRefs.length > 1) {
+    const refNodes = shapeRefs.map((r) => namedNode(base ? base + r : r));
+    const listHead = buildRdfList(refNodes, quads);
+    const unionAnon = blankNode();
+    quads.push(quad(unionAnon, namedNode(`${OWL}unionOf`), listHead));
+    quads.push(quad(stmtNode, OWL_ON_CLASS, unionAnon));
   }
 
   // Value type: structured → owl:onClass (class constraint, e.g. foaf:Agent)
-  if (stmtDef.a && !stmtDef.description) {
+  if (stmtDef.a && shapeRefs.length === 0) {
     const classes = Array.isArray(stmtDef.a) ? stmtDef.a : [stmtDef.a];
     if (classes.length === 1) {
       const classIri = expandPrefixed(classes[0], namespaces, base);

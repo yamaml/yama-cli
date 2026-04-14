@@ -20,7 +20,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, quad } = DataFactory;
@@ -107,7 +107,7 @@ function resolvePropertyType(stmtDef) {
 
   // Explicit IRI/URI type or structured reference → object property
   if (type === "IRI" || type === "URI") return "object";
-  if (stmtDef.description) return "object";
+  if (descRefs(stmtDef).length > 0) return "object";
   if (stmtDef.a) return "object";
 
   // Explicit literal type or datatype → datatype property
@@ -220,9 +220,13 @@ function buildVocabQuads(doc, namespaces, base) {
           if (dtIri) {
             quads.push(quad(propNode, RDFS_RANGE, namedNode(dtIri)));
           }
-        } else if (stmtDef.description) {
-          // Structured reference to another description's class
-          const refDesc = descriptions[stmtDef.description];
+        } else if (descRefs(stmtDef).length > 0) {
+          // Structured reference to another description's class.
+          // For multi-shape disjunctions the vocab's rdfs:range
+          // collapses to the first ref's class — vocabularies are
+          // conjunctive by design, so we don't emit union ranges here.
+          const firstRef = descRefs(stmtDef)[0];
+          const refDesc = descriptions[firstRef];
           if (refDesc?.a) {
             const refClassIri = expandPrefixed(refDesc.a, namespaces, base);
             if (refClassIri) {
