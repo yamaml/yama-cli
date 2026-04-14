@@ -1,0 +1,368 @@
+<rdf:RDF
+    xmlns:dcterms="http://purl.org/dc/terms/"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+    xmlns:xl="http://www.w3.org/2008/05/skos-xl#"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:dsp="http://purl.org/metainfo/terms/dsp#"
+    xmlns:reg="http://purl.org/metainfo/terms/registry#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:dmm="http://anise.slis.tsukuba.ac.jp/dmm/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:foaf="http://xmlns.com/foaf/0.1/"
+    xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+>
+ 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Ontology"/>
+    <reg:registered>2013-12-02</reg:registered>
+    <reg:owner rdf:resource="http://purl.org/metainfo/indvs/organization/G0000021"/>
+    <reg:created>2013-12-02</reg:created>
+    <reg:creator rdf:resource="http://purl.org/metainfo/indvs/organization/G0000021"/>
+    <reg:comment> マンガの設計メタデータDSP</reg:comment>
+    <reg:title> DSP for Manga Design Metadata</reg:title>
+    <reg:primaryDescription rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN"/>
+    <reg:registrant>tsuna</reg:registrant>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <reg:idField>MangaID</reg:idField>
+    <reg:statementOrder>Setting</reg:statementOrder>
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/Manga"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+    <rdfs:label>MAIN</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN"/>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting">
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdfs:label>Setting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasSetting"/>
+    <rdfs:comment>マンガの設定</rdfs:comment>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting">
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/StorySetting"/>
+    <reg:idField>PlotSettingID</reg:idField>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdfs:label>PlotSetting</rdfs:label>
+    <reg:statementOrder>cast,stage</reg:statementOrder>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting">
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/StageSetting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <reg:statementOrder>location,coord</reg:statementOrder>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting"/>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location"/>
+    <reg:idField>StageSettingID</reg:idField>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label>StageSetting</rdfs:label>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting">
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation"/>
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/Setting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title"/>
+    <rdfs:label>Setting</rdfs:label>
+    <reg:statementOrder>title,image,description,relation,CharacterSetting,StageSetting,PlotSetting</reg:statementOrder>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting"/>
+    <reg:idField>SettingID</reg:idField>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting">
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/CharacterSetting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label>CharacterSetting</rdfs:label>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model"/>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex"/>
+    <reg:statementOrder>name,sex,hometown,model,role</reg:statementOrder>
+    <reg:idField>CharacterSettingID</reg:idField>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <reg:idField>RoleID</reg:idField>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#DescriptionTemplate"/>
+    <dsp:valueURIOccurrence>mandatory</dsp:valueURIOccurrence>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName"/>
+    <rdfs:label>Role</rdfs:label>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <reg:statementOrder>RoleName,description</reg:statementOrder>
+    <dsp:resourceClass rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/Role"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasCarahcter"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdfs:label>cast</rdfs:label>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:label>stage</rdfs:label>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasStage"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/coord"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdfs:label>coord</rdfs:label>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdfs:label>location</rdfs:label>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/name"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdfs:comment>人物設定</rdfs:comment>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdfs:label>CharacterSetting</rdfs:label>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:maxQualifiedCardinality>1</owl:maxQualifiedCardinality>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasCharacterSetting"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting">
+    <owl:maxQualifiedCardinality>1</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:label>PlotSetting</rdfs:label>
+    <rdfs:comment>事柄設定</rdfs:comment>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasPlotSetting"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasStageSetting"/>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:maxQualifiedCardinality>1</owl:maxQualifiedCardinality>
+    <rdfs:label>StageSetting</rdfs:label>
+    <rdfs:comment>舞台設定</rdfs:comment>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdfs:label>description</rdfs:label>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description"/>
+    <owl:onProperty rdf:resource="http://purl.org/dc/elements/1.1/description"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:maxQualifiedCardinality>1</owl:maxQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:nodeID="A1">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#List"/>
+    <rdf:first rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="A2">
+    <owl:oneOf rdf:nodeID="A1"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image">
+    <rdfs:label>image</rdfs:label>
+    <owl:onClass rdf:nodeID="A2"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/image"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation">
+    <rdfs:label>relation</rdfs:label>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:onClass rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/relation"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title">
+    <rdfs:label>title</rdfs:label>
+    <owl:onProperty rdf:resource="http://purl.org/dc/elements/1.1/title"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:maxQualifiedCardinality>1</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hometown"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdfs:label>hometown</rdfs:label>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:nodeID="A3">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#List"/>
+    <rdf:first rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/model"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:onClass rdf:nodeID="A4"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:label>model</rdfs:label>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="A4">
+    <owl:oneOf rdf:nodeID="A3"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdfs:label>name</rdfs:label>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/name"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/hasRole"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdfs:label>role</rdfs:label>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex">
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/sex"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdfs:label>sex</rdfs:label>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName">
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <rdfs:label>RoleName</rdfs:label>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName"/>
+    <owl:onProperty rdf:resource="http://anise.slis.tsukuba.ac.jp/dmm/name"/>
+  </rdf:Description> 
+  <rdf:Description rdf:about="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description">
+    <owl:maxQualifiedCardinality>-</owl:maxQualifiedCardinality>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onDataRange rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Resource"/>
+    <owl:onProperty rdf:resource="http://purl.org/dc/elements/1.1/description"/>
+    <rdf:type rdf:resource="http://purl.org/metainfo/terms/dsp#StatementTemplate"/>
+    <owl:minQualifiedCardinality>0</owl:minQualifiedCardinality>
+    <rdfs:subClassOf rdf:resource="http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description"/>
+    <rdfs:label>description</rdfs:label>
+  </rdf:Description>
+</rdf:RDF>

@@ -1,0 +1,309 @@
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix xl: <http://www.w3.org/2008/05/skos-xl#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix dsp: <http://purl.org/metainfo/terms/dsp#> .
+@prefix reg: <http://purl.org/metainfo/terms/registry#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dmm: <http://anise.slis.tsukuba.ac.jp/dmm/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm>
+      a       owl:Ontology ;
+      reg:comment " マンガの設計メタデータDSP" ;
+      reg:created "2013-12-02" ;
+      reg:creator <http://purl.org/metainfo/indvs/organization/G0000021> ;
+      reg:owner <http://purl.org/metainfo/indvs/organization/G0000021> ;
+      reg:primaryDescription
+              <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN> ;
+      reg:registered "2013-12-02" ;
+      reg:registrant "tsuna" ;
+      reg:title " DSP for Manga Design Metadata" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "MAIN" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting> ;
+      dsp:resourceClass dmm:Manga ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "MangaID" ;
+      reg:statementOrder "Setting" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:comment "マンガの設定" ;
+      rdfs:label "Setting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#MAIN-Setting> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting> ;
+      owl:onProperty dmm:hasSetting .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "PlotSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage> ;
+      dsp:resourceClass dmm:StorySetting ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "PlotSettingID" ;
+      reg:statementOrder "cast,stage" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "StageSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord> ;
+      dsp:resourceClass dmm:StageSetting ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "StageSettingID" ;
+      reg:statementOrder "location,coord" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "Setting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting> ;
+      dsp:resourceClass dmm:Setting ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "SettingID" ;
+      reg:statementOrder "title,image,description,relation,CharacterSetting,StageSetting,PlotSetting" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "CharacterSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown> ;
+      dsp:resourceClass dmm:CharacterSetting ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "CharacterSettingID" ;
+      reg:statementOrder "name,sex,hometown,model,role" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role>
+      a       dsp:DescriptionTemplate , rdfs:Resource , rdfs:Class , owl:Class ;
+      rdfs:label "Role" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description> , <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role> ;
+      dsp:resourceClass dmm:Role ;
+      dsp:valueURIOccurrence
+              "mandatory" ;
+      reg:idField "RoleID" ;
+      reg:statementOrder "RoleName,description" .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "cast" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-cast> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting> ;
+      owl:onProperty dmm:hasCarahcter .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "stage" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting-stage> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting> ;
+      owl:onProperty dmm:hasStage .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "coord" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-coord> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:coord .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "location" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting-location> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:name .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:comment "人物設定" ;
+      rdfs:label "CharacterSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-CharacterSetting> ;
+      owl:maxQualifiedCardinality
+              "1" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting> ;
+      owl:onProperty dmm:hasCharacterSetting .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:comment "事柄設定" ;
+      rdfs:label "PlotSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-PlotSetting> ;
+      owl:maxQualifiedCardinality
+              "1" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#PlotSetting> ;
+      owl:onProperty dmm:hasPlotSetting .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:comment "舞台設定" ;
+      rdfs:label "StageSetting" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-StageSetting> ;
+      owl:maxQualifiedCardinality
+              "1" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#StageSetting> ;
+      owl:onProperty dmm:hasStageSetting .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "description" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-description> ;
+      owl:maxQualifiedCardinality
+              "1" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dc:description .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "image" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-image> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass
+              [ owl:oneOf
+                        [ a       rdf:List , rdfs:Resource ;
+                          rdf:first rdfs:Resource ;
+                          rdf:rest ()
+                        ]
+              ] ;
+      owl:onProperty dmm:image .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "relation" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-relation> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting> ;
+      owl:onProperty dmm:relation .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "title" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Setting-title> ;
+      owl:maxQualifiedCardinality
+              "1" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dc:title .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "hometown" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-hometown> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:hometown .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "model" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-model> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onClass
+              [ owl:oneOf
+                        [ a       rdf:List , rdfs:Resource ;
+                          rdf:first rdfs:Resource ;
+                          rdf:rest ()
+                        ]
+              ] ;
+      owl:onProperty dmm:model .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "name" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-name> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:name .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "role" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-role> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:hasRole .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "sex" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#CharacterSetting-sex> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:sex .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "RoleName" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-RoleName> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dmm:name .
+
+<http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description>
+      a       rdfs:Resource , rdfs:Class , owl:Restriction , dsp:StatementTemplate ;
+      rdfs:label "description" ;
+      rdfs:subClassOf <http://mdlab.slis.tsukuba.ac.jp/schema/dmm#Role-description> ;
+      owl:maxQualifiedCardinality
+              "-" ;
+      owl:minQualifiedCardinality
+              "0" ;
+      owl:onDataRange rdfs:Literal ;
+      owl:onProperty dc:description .

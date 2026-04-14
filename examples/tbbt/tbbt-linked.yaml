@@ -1,0 +1,187 @@
+%YAML 1.2
+---
+base: http://purl.org/yama/examples/2022/tbbt/0.1/
+
+namespaces:
+  foaf: http://xmlns.com/foaf/0.1/
+  schema: http://schema.org/
+  xsd: http://www.w3.org/2001/XMLSchema#
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+
+defaults:
+  mapping:
+    source: tbbt_characters.csv
+    type: csv
+
+descriptions:
+  character:
+    a: foaf:Person
+    label: Character
+    note: Details of the character
+    id:
+      mapping:
+        source: tbbt_characters.csv
+        type: csv
+        path: ID
+
+    statements:
+      name:
+        label: Name
+        property: foaf:name
+        min: 1
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: name
+
+      familyName:
+        label: Family Name
+        property: foaf:familyName
+        min: 1
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: familyName
+
+      firstName:
+        label: First Name
+        property: foaf:firstName
+        min: 1
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: firstName
+
+      additionalName:
+        label: Additional Name
+        property: schema:additionalName
+        min: 0
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: additionalName
+
+      jobTitle:
+        label: Job Title
+        property: schema:jobTitle
+        min: 0
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: jobTitle
+
+      address:
+        label: Address
+        property: schema:address
+        min: 0
+        max: 1
+        type: BNODE
+        description: address
+
+      knows:
+        label: Knows
+        property: foaf:knows
+        min: 0
+        type: IRI
+        description: character
+        mapping:
+          path: knows
+          separator: ","
+
+      byArtist:
+        label: Portrayed by
+        property: schema:byArtist
+        min: 0
+        max: 1
+        type: IRI
+        description: artist
+        mapping:
+          path: byArtist
+
+      wikidata:
+        label: Wikidata
+        property: rdfs:seeAlso
+        type: IRI
+        mapping:
+          path: wikidata
+          prepend: http://www.wikidata.org/entity/
+
+  address:
+    a: schema:PostalAddress
+    label: Address
+    statements:
+      street:
+        label: Street
+        property: schema:streetAddress
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: street
+
+      locality:
+        label: Locality
+        property: schema:addressLocality
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: locality
+
+      region:
+        label: State
+        property: schema:addressRegion
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: region
+
+      country:
+        label: Country
+        property: schema:addressCountry
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: country
+
+      postalCode:
+        label: Postal Code
+        property: schema:postalCode
+        type: literal
+        datatype: xsd:string
+        mapping:
+          path: postalCode
+
+  artist:
+    a: foaf:Person
+    label: Artist
+    note: The actor portraying the character
+    id:
+      mapping:
+        source: tbbt_actors.csv
+        type: csv
+        path: ID
+
+    statements:
+      name:
+        label: Name
+        property: schema:name
+        min: 1
+        max: 1
+        type: literal
+        datatype: xsd:string
+        mapping:
+          source: tbbt_actors.csv
+          path: name
+
+      wikidata:
+        label: Wikidata
+        property: rdfs:isDefinedBy
+        type: IRI
+        mapping:
+          source: tbbt_actors.csv
+          path: wikidata
+          prepend: http://www.wikidata.org/entity/
