@@ -1,0 +1,38 @@
+{
+  "name": "@nishad/yama",
+  "version": "0.2.0",
+  "exports": {
+    ".": "./src/yama.js"
+  },
+  "publish": {
+    "include": [
+      "src/**",
+      "README.md",
+      "LICENSE",
+      "deno.json"
+    ],
+    "exclude": [
+      "docs/**",
+      "examples/**",
+      "node_modules/**",
+      ".claude/**",
+      "*.log"
+    ]
+  },
+  "tasks": {
+    "start": "deno run --allow-read --allow-write --allow-env --allow-net src/yama.js",
+    "compile": "deno compile --allow-read --allow-write --allow-env --allow-net --output yama src/yama.js"
+  },
+  "imports": {
+    "@std/cli": "jsr:@std/cli@^1.0.28",
+    "@std/csv": "jsr:@std/csv@^1.0.6",
+    "@std/path": "jsr:@std/path@^1.1.4",
+    "@std/yaml": "jsr:@std/yaml@^1.0.12",
+    "jsonata": "npm:jsonata@^2.1.0",
+    "@hpcc-js/wasm-graphviz": "npm:@hpcc-js/wasm-graphviz@^1.21.1",
+    "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@^2.6.2",
+    "n3": "npm:n3@^1.23.1",
+    "xlsx": "npm:xlsx@^0.18.5"
+  },
+  "nodeModulesDir": "auto"
+}
