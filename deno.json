@@ -1,6 +1,6 @@
 {
   "name": "@nishad/yama",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "exports": {
     ".": "./src/yama.js"
   },
@@ -32,7 +32,9 @@
     "@hpcc-js/wasm-graphviz": "npm:@hpcc-js/wasm-graphviz@^1.21.1",
     "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@^2.6.2",
     "n3": "npm:n3@^1.23.1",
-    "xlsx": "npm:xlsx@^0.18.5"
+    "xlsx": "npm:xlsx@^0.18.5",
+    "pdfkit": "npm:pdfkit@^0.17.2",
+    "svg-to-pdfkit": "npm:svg-to-pdfkit@^0.1.8"
   },
   "nodeModulesDir": "auto"
 }

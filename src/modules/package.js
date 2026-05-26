@@ -12,6 +12,7 @@
  *   README.md         — Format descriptions with spec links
  *   diagram.svg       — Overview diagram
  *   diagram-detail.svg — Detailed diagram with all properties
+ *   diagram.pdf       — Overview diagram as vector PDF (LaTeX-ready, archival)
  *   profile.yaml      — YAMA source (canonical YAML)
  *   profile.json      — JSON representation
  *   simpledsp.tsv     — SimpleDSP (English)
@@ -253,6 +254,7 @@ Application profile package generated with [YAMA](https://www.yamaml.org).
 | \`owl-dsp.ttl\` | OWL-DSP | OWL Description Set Profile ([spec](https://www.kanzaki.com/ns/dsp#)) |
 | \`diagram.svg\` | SVG | Overview diagram |
 | \`diagram-detail.svg\` | SVG | Detailed diagram with all properties |
+| \`diagram.pdf\` | PDF | Overview diagram as vector PDF (LaTeX-ready) |
 | \`datapackage.json\` | Frictionless | Data Package descriptor ([spec](https://datapackage.org/)) |
 
 ## Generated
@@ -392,6 +394,16 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
     await generateDiagram(yamlPath, {
       output: join(outputDir, "diagram-detail.svg"),
       format: "color",
+    });
+  });
+
+  // -- diagram.pdf (overview, vector PDF for LaTeX / archival) ------------
+  await generate("diagram.pdf", async () => {
+    const { generateDiagram } = await import("./diagram.js");
+    const yamlPath = join(outputDir, "profile.yaml");
+    await generateDiagram(yamlPath, {
+      output: join(outputDir, "diagram.pdf"),
+      format: "overview",
     });
   });
 

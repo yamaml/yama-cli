@@ -229,19 +229,31 @@ Examples:
 
 Usage: yama diagram -i <file> [-o <output>] [-f <style>]
 
-Output format determined by extension: .svg, .png, .dot, .ps, .eps, .json
+Output format determined by extension:
+  .svg   vector SVG (default)
+  .pdf   vector PDF — selectable text, LaTeX-friendly, archival
+  .png   rasterised bitmap
+  .dot   raw Graphviz DOT source
+  .ps    PostScript
+  .eps   Encapsulated PostScript
+  .json  Graphviz JSON
+
 Styles: color (default), bw, overview, overview-bw
 
 Examples:
   yama diagram -i profile.yaml -o diagram.svg
+  yama diagram -i profile.yaml -o diagram.pdf
   yama diagram -i profile.yaml -o diagram.png -f overview-bw`,
 
-  render: `yama render — Render DOT to SVG/PNG (no Graphviz needed)
+  render: `yama render — Render DOT to SVG/PNG/PDF (no Graphviz needed)
 
 Usage: yama render -i <file.dot> [-o <output>]
 
+Output format determined by extension: .svg, .pdf, .png, .ps, .eps, .json
+
 Examples:
-  yama render -i diagram.dot -o diagram.svg`,
+  yama render -i diagram.dot -o diagram.svg
+  yama render -i diagram.dot -o diagram.pdf`,
 
   datapackage: `yama datapackage — Generate Frictionless Data Package
 
@@ -701,7 +713,7 @@ Commands:
   simpledsp       Export YAMA to SimpleDSP (tsv, csv, xlsx)
   from-simpledsp  Import SimpleDSP (tsv, csv, xlsx) to YAMA
   vocab           Generate an RDF vocabulary/ontology from a YAMA file
-  diagram         Generate a diagram (svg, png, dot, ps, eps, json)
+  diagram         Generate a diagram (svg, pdf, png, dot, ps, eps, json)
   render          Render a DOT file to SVG/PNG (no Graphviz needed)
   report          Generate profile documentation (html, md)
   datapackage     Generate a Frictionless Data Package descriptor
