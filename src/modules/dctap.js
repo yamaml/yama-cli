@@ -470,11 +470,48 @@ function toStatementKey(propertyID, existingKeys) {
 }
 
 /**
+ * Case-insensitive lookup map from lowercased DCTAP header names to
+ * their canonical camelCase form. Built once from {@link DCTAP_COLUMNS}.
+ *
+ * Real-world DCTAP profiles ship with varying header casing — the DCMI
+ * SRAP April model, for instance, uses `valueDatatype` (lowercase `t`)
+ * rather than the elements list's canonical `valueDataType`. Without
+ * normalisation, exact-key access on `row.valueDataType` returns
+ * undefined and the data is silently dropped on import.
+ *
+ * Mirrors the same fix in tapir's `dctap-parser.ts:CANONICAL_BY_LOWER`.
+ */
+const CANONICAL_BY_LOWER = new Map(
+  DCTAP_COLUMNS.map((k) => [k.toLowerCase(), k]),
+);
+
+/**
+ * Returns a row with canonical DCTAP keys, picking the matching value
+ * from `row` regardless of the input header's letter case. Unknown
+ * columns are dropped — `rowsToYama` only reads canonical fields, so
+ * preserving variant spellings would just leave stale data behind.
+ *
+ * @param {Record<string, string>} row
+ * @returns {Record<string, string>}
+ */
+function normaliseDctapRow(row) {
+  const out = {};
+  for (const key of Object.keys(row)) {
+    const canonical = CANONICAL_BY_LOWER.get(key.trim().toLowerCase());
+    if (canonical) out[canonical] = row[key];
+  }
+  return out;
+}
+
+/**
  * Converts DCTAP rows to a YAMA document structure.
  *
  * Handles the DCTAP convention where `shapeID` on a row introduces
  * a new shape, and subsequent rows with empty `shapeID` belong to
  * the same shape.
+ *
+ * Headers are matched case-insensitively, so profiles authored with
+ * non-canonical casing (e.g. SRAP's `valueDatatype`) import correctly.
  *
  * @param {Object[]} rows - Parsed tabular rows.
  * @returns {Object} YAMA document (without namespaces/base/mapping).
@@ -483,7 +520,8 @@ export function rowsToYama(rows) {
   const descriptions = {};
   let currentShapeID = null;
 
-  for (const row of rows) {
+  for (const rawRow of rows) {
+    const row = normaliseDctapRow(rawRow);
     const shapeID = String(row.shapeID || "").trim();
     const propertyID = String(row.propertyID || "").trim();
 
