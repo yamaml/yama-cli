@@ -16,7 +16,7 @@
  * @module report
  */
 
-import { descRefs } from "./io.js";
+import { datatypes, descRefs } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // Standard prefix table (mirrors dsp.js STANDARD_PREFIXES)
@@ -161,7 +161,8 @@ function formatCard(min, max) {
  * @returns {string}
  */
 function resolveType(stmtDef, namespaces) {
-  if (stmtDef.datatype) return stmtDef.datatype;
+  const dts = datatypes(stmtDef);
+  if (dts.length > 0) return dts.join(" ");
   if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "IRI";
   if (stmtDef.type === "literal") return "Literal";
   if (stmtDef.type) return stmtDef.type;

@@ -39,7 +39,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -214,14 +214,27 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
       literal(String(stmtDef.max), XSD_INTEGER)));
   }
 
-  // sh:datatype
-  if (stmtDef.datatype) {
-    const dtIri = expandPrefixed(stmtDef.datatype, namespaces, base);
+  // sh:datatype is single-valued in SHACL, so multi-datatype becomes
+  // sh:or of nested [sh:datatype X] blank nodes — the canonical SHACL
+  // idiom for "datatype is one of". Mirrors the multi-shape sh:or
+  // block below.
+  const dts = datatypes(stmtDef);
+  if (dts.length === 1) {
+    const dtIri = expandPrefixed(dts[0], namespaces, base);
     quads.push(quad(propNode, SH_DATATYPE, namedNode(dtIri)));
+  } else if (dts.length > 1) {
+    const dtAnons = dts.map((dt) => {
+      const anon = blankNode();
+      const dtIri = expandPrefixed(dt, namespaces, base);
+      quads.push(quad(anon, SH_DATATYPE, namedNode(dtIri)));
+      return anon;
+    });
+    const listHead = buildRdfList(dtAnons, quads);
+    quads.push(quad(propNode, SH_OR, listHead));
   }
 
   // sh:nodeKind (only when no datatype — datatype already implies Literal)
-  if (!stmtDef.datatype) {
+  if (dts.length === 0) {
     const nodeKind = resolveNodeKind(stmtDef.type);
     if (nodeKind) {
       quads.push(quad(propNode, SH_NODE_KIND, nodeKind));

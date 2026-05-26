@@ -33,7 +33,7 @@
 
 import { parse as parseYaml } from "@std/yaml";
 import { basename } from "@std/path";
-import { readInput } from "./io.js";
+import { datatypes, readInput } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // XSD-to-Frictionless type mapping
@@ -94,11 +94,12 @@ const MEDIATYPE_MAP = {
  * @returns {{type: string, format?: string}}
  */
 function resolveFieldType(stmtDef) {
-  if (stmtDef.datatype) {
-    // Extract local name from prefixed datatype (e.g. "xsd:string" → "string")
-    const local = stmtDef.datatype.includes(":")
-      ? stmtDef.datatype.split(":").pop()
-      : stmtDef.datatype;
+  // Frictionless allows only one type per field. For multi-datatype
+  // statements we emit the first; warnings about the dropped extras
+  // are produced by the caller — this helper just picks a winner.
+  const first = datatypes(stmtDef)[0];
+  if (first) {
+    const local = first.includes(":") ? first.split(":").pop() : first;
     const mapped = XSD_TYPE_MAP[local];
     if (mapped) return { ...mapped };
   }

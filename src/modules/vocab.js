@@ -20,7 +20,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, quad } = DataFactory;
@@ -212,11 +212,12 @@ function buildVocabQuads(doc, namespaces, base) {
           record.commented = true;
         }
 
-        // rdfs:range
-        if (stmtDef.datatype) {
-          // Literal datatype range (take the first if space-separated)
-          const datatypes = stmtDef.datatype.split(/\s+/).filter(Boolean);
-          const dtIri = expandPrefixed(datatypes[0], namespaces, base);
+        // rdfs:range — single literal datatype. For multi-datatype the
+        // first wins; vocabularies are conjunctive by design and don't
+        // model unions of ranges, so we don't emit owl:unionOf here.
+        const stmtDts = datatypes(stmtDef);
+        if (stmtDts.length > 0) {
+          const dtIri = expandPrefixed(stmtDts[0], namespaces, base);
           if (dtIri) {
             quads.push(quad(propNode, RDFS_RANGE, namedNode(dtIri)));
           }

@@ -18,7 +18,7 @@ import jsonata from "jsonata";
 import N3 from "n3";
 import * as XLSX from "xlsx";
 import { serializeRdf, SUPPORTED_FORMATS } from "./serialize.js";
-import { readInput, readInputBytes } from "./io.js";
+import { datatypes, readInput, readInputBytes } from "./io.js";
 
 export { SUPPORTED_FORMATS };
 
@@ -382,7 +382,10 @@ async function processStatement(subject, stmtDef, idColumn, idValue, ctx, quads)
     quads.push(quad(
       subject,
       namedNode(predIri),
-      makeRdfObject(v, stmtType, stmtDef.datatype, ctx.namespaces, ctx.base),
+      // RDF literals have exactly one datatype per value. For a
+      // multi-datatype statement we attach the first — the union is
+      // a schema-level constraint, not a per-literal property.
+      makeRdfObject(v, stmtType, datatypes(stmtDef)[0], ctx.namespaces, ctx.base),
     ));
   }
 }

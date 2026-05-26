@@ -20,7 +20,7 @@ import { parse as parseYaml } from "@std/yaml";
 import { Graphviz } from "@hpcc-js/wasm-graphviz";
 import { extname } from "@std/path";
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
-import { descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput } from "./io.js";
 
 // ── Color palette ─────────────────────────────────────────────────
 
@@ -111,7 +111,8 @@ function formatCard(min, max) {
 function typeLabel(stmtDef, ns) {
   const refs = descRefs(stmtDef);
   if (refs.length > 0) return refs.join(" ");
-  if (stmtDef.datatype) return compactIRI(stmtDef.datatype, ns);
+  const dts = datatypes(stmtDef);
+  if (dts.length > 0) return dts.map((dt) => compactIRI(dt, ns)).join(" ");
   if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "URI";
   if (stmtDef.type === "literal") return "Literal";
   if (stmtDef.type) return stmtDef.type;
@@ -355,6 +356,7 @@ function buildOverviewDot(doc, { mode = "color" } = {}) {
  *
  * Output format is determined by file extension:
  *   .svg  — rendered SVG (via WASM Graphviz, default)
+ *   .pdf  — vector PDF (via PDFKit + svg-to-pdfkit)
  *   .png  — rasterised PNG (via resvg WASM)
  *   .dot  — raw Graphviz DOT source
  *   .gv   — raw Graphviz DOT source
@@ -393,7 +395,7 @@ export async function generateDiagram(file, { output, format } = {}) {
     return;
   }
 
-  // Render SVG first (needed for PNG too)
+  // Render SVG first (needed for PNG and PDF too)
   const graphviz = await Graphviz.load();
 
   if (ext === ".png") {
@@ -404,6 +406,22 @@ export async function generateDiagram(file, { output, format } = {}) {
       console.error(`Written to ${output}`);
     } else {
       Deno.stdout.writeSync(png);
+    }
+    return;
+  }
+
+  if (ext === ".pdf") {
+    // Vector PDF output — selectable text, scales losslessly, ideal
+    // for LaTeX `\includegraphics` or long-term archival alongside
+    // the profile source.
+    const svg = graphviz.dot(dot, "svg");
+    const { svgToPdf } = await import("./svg-to-pdf.js");
+    const pdf = await svgToPdf(svg);
+    if (output) {
+      await Deno.writeFile(output, pdf);
+      console.error(`Written to ${output}`);
+    } else {
+      Deno.stdout.writeSync(pdf);
     }
     return;
   }
@@ -438,7 +456,7 @@ export async function generateDiagram(file, { output, format } = {}) {
  * @param {string} file - Input DOT file path.
  * @param {object} opts
  * @param {string} [opts.output] - Output file path (stdout if omitted).
- *        Format is determined by extension: .svg, .png, .ps, .eps, .json
+ *        Format is determined by extension: .svg, .pdf, .png, .ps, .eps, .json
  * @returns {Promise<void>}
  */
 export async function renderDot(file, { output } = {}) {
@@ -457,6 +475,19 @@ export async function renderDot(file, { output } = {}) {
       console.error(`Written to ${output}`);
     } else {
       Deno.stdout.writeSync(png);
+    }
+    return;
+  }
+
+  if (ext === ".pdf") {
+    const svg = graphviz.dot(dot, "svg");
+    const { svgToPdf } = await import("./svg-to-pdf.js");
+    const pdf = await svgToPdf(svg);
+    if (output) {
+      await Deno.writeFile(output, pdf);
+      console.error(`Written to ${output}`);
+    } else {
+      Deno.stdout.writeSync(pdf);
     }
     return;
   }

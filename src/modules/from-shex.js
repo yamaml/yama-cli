@@ -222,6 +222,18 @@ function parseTripleConstraint(line) {
     stmt.description = refs.length === 1 ? refs[0] : refs;
     rest = disjMatch[2].trim();
   }
+  // Multi-datatype disjunction: (xsd:gYear OR xsd:gYearMonth OR xsd:date)
+  // Mirrors what shex.js emits for multi-datatype statements.
+  else if (/^\(\s*[\w]+:[\w]+(?:\s+OR\s+[\w]+:[\w]+)+\s*\)/.test(rest)) {
+    const dtMatch = rest.match(/^\(\s*([\w:\s]+?)\s*\)(.*)/);
+    if (dtMatch) {
+      const dts = dtMatch[1].split(/\s+OR\s+/).map((s) => s.trim()).filter(Boolean);
+      if (dts.length > 0) {
+        stmt.datatype = dts.length === 1 ? dts[0] : dts;
+        rest = dtMatch[2].trim();
+      }
+    }
+  }
   // Shape reference: @<shapeName>
   else if (/^@<[^>]+>/.test(rest)) {
     const shapeRefMatch = rest.match(/^@<([^>]+)>(.*)/);

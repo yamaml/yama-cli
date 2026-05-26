@@ -10,7 +10,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput } from "./io.js";
 
 // ── Standard prefixes (Table 19 from spec + schema: extension) ──
 
@@ -206,9 +206,10 @@ export function validateYamaDocument(doc, filePath, sourceFormat = "yaml") {
           { path: stmtPath }));
       }
 
-      // Datatype prefix
-      if (stmtDef.datatype) {
-        checkPrefix(stmtDef.datatype, namespaces, { path: `${stmtPath}.datatype` }, "datatype", errors, sourceFormat, info);
+      // Datatype prefix(es) — check each one when the field is a
+      // multi-datatype array.
+      for (const dt of datatypes(stmtDef)) {
+        checkPrefix(dt, namespaces, { path: `${stmtPath}.datatype` }, "datatype", errors, sourceFormat, info);
       }
 
       // Description reference(s) — each ref in the list must resolve

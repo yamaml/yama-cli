@@ -55,7 +55,7 @@ import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import * as XLSX from "xlsx";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { descRefs, readInput, readInputBytes } from "./io.js";
+import { datatypes, descRefs, readInput, readInputBytes } from "./io.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -239,8 +239,10 @@ function resolveSimpleDspConstraint(stmtDef, namespaces) {
     return classes.join(" ");
   }
 
-  // Datatype constraint
+  // Datatype constraint — multi-datatype is spec-endorsed (§4.6 Table 16)
+  // and serialised as a space-separated list in the Constraint cell.
   if (stmtDef.datatype) {
+    if (Array.isArray(stmtDef.datatype)) return stmtDef.datatype.join(" ");
     return stmtDef.datatype;
   }
 
@@ -619,11 +621,15 @@ export function simpleDspToYama(blocks, parsedNs) {
         case "literal":
           stmt.type = "literal";
           if (constraint) {
-            // Could be a datatype (e.g. xsd:date) or quoted picklist
+            // Could be a datatype (e.g. xsd:date) or quoted picklist.
+            // SimpleDSP §4.6 Table 16 endorses space-separated multi-
+            // datatype (union semantics); we store an array when more
+            // than one token is present.
             if (constraint.startsWith('"')) {
               stmt.values = parseQuotedValues(constraint);
             } else {
-              stmt.datatype = constraint;
+              const parts = constraint.split(/\s+/).filter(Boolean);
+              stmt.datatype = parts.length === 1 ? parts[0] : parts;
             }
           }
           break;
@@ -671,9 +677,11 @@ export function simpleDspToYama(blocks, parsedNs) {
           }
           break;
         default:
-          // No specific type — leave unconstrained
+          // No specific type — leave unconstrained. Accept the spec
+          // §4.6 Table 16 multi-datatype shape here too for symmetry.
           if (constraint) {
-            stmt.datatype = constraint;
+            const parts = constraint.split(/\s+/).filter(Boolean);
+            stmt.datatype = parts.length === 1 ? parts[0] : parts;
           }
           break;
       }
@@ -954,22 +962,21 @@ function buildStatementTemplate(
   }
 
   // Value type: datatype → owl:onDataRange
-  // Handle multiple space-separated datatypes (e.g. "xsd:decimal xsd:integer")
-  if (stmtDef.datatype) {
-    const datatypes = stmtDef.datatype.split(/\s+/).filter(Boolean);
-    if (datatypes.length === 1) {
-      const dtIri = expandPrefixed(datatypes[0], namespaces, base);
-      quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, namedNode(dtIri)));
-    } else {
-      // Multiple datatypes: owl:onDataRange [owl:unionOf (...)]
-      const dtNodes = datatypes.map((dt) =>
-        namedNode(expandPrefixed(dt, namespaces, base)),
-      );
-      const listHead = buildRdfList(dtNodes, quads);
-      const unionAnon = blankNode();
-      quads.push(quad(unionAnon, namedNode(`${OWL}unionOf`), listHead));
-      quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, unionAnon));
-    }
+  // Multi-datatype is normalised via `datatypes()` which accepts both
+  // scalar (legacy) and array (post-multi-datatype) YAML shapes.
+  const dts = datatypes(stmtDef);
+  if (dts.length === 1) {
+    const dtIri = expandPrefixed(dts[0], namespaces, base);
+    quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, namedNode(dtIri)));
+  } else if (dts.length > 1) {
+    // Multiple datatypes: owl:onDataRange [owl:unionOf (...)]
+    const dtNodes = dts.map((dt) =>
+      namedNode(expandPrefixed(dt, namespaces, base)),
+    );
+    const listHead = buildRdfList(dtNodes, quads);
+    const unionAnon = blankNode();
+    quads.push(quad(unionAnon, namedNode(`${OWL}unionOf`), listHead));
+    quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, unionAnon));
   }
 
   // Value type: structured → owl:onClass (shape reference(s))

@@ -322,7 +322,9 @@ function yamaToRows(doc) {
         mandatory: toMandatory(stmtDef.min),
         repeatable: toRepeatable(stmtDef.max, stmtDef.min),
         valueNodeType: toValueNodeType(stmtDef.type),
-        valueDataType: stmtDef.datatype || "",
+        valueDataType: Array.isArray(stmtDef.datatype)
+          ? stmtDef.datatype.join(" ")
+          : (stmtDef.datatype || ""),
         valueConstraint,
         valueConstraintType,
         // DCTAP valueShape: single or space-separated multi-shape (SRAP convention).
@@ -572,8 +574,15 @@ export function rowsToYama(rows) {
     const yamaType = fromValueNodeType(row.valueNodeType);
     if (yamaType) stmt.type = yamaType;
 
+    // Multi-datatype: DCMI SRAP and SimpleDSP §4.6 Table 16 both use
+    // a space-separated list of datatypes to express a union. Store as
+    // an array so downstream generators can emit format-specific
+    // disjunctions (sh:or, ShEx OR, owl:unionOf).
     const dataType = String(row.valueDataType || "").trim();
-    if (dataType) stmt.datatype = dataType;
+    if (dataType) {
+      const parts = dataType.split(/\s+/).filter(Boolean);
+      stmt.datatype = parts.length === 1 ? parts[0] : parts;
+    }
 
     const mandatory = parseBool(row.mandatory);
     const repeatable = parseBool(row.repeatable);

@@ -389,21 +389,27 @@ function parseShaclToYama(turtleText) {
           stmt.description = localName(nodeRef, base);
         }
 
-        // sh:or with an RDF list of nested sh:node blank nodes →
-        // description (multi-shape disjunction). Matches the form
-        // emitted by the shacl.js generator for multi-ref statements.
-        // Nested/complex sh:or (e.g. containing sh:datatype) is imported
-        // as a best-effort list of shape names only.
+        // sh:or with an RDF list of nested blank nodes can carry
+        // either a multi-shape disjunction (sh:node) or a multi-
+        // datatype union (sh:datatype) — both shapes are emitted by
+        // the shacl.js generator. We import whichever the list
+        // happens to contain.
         const orHead = getOne(index, propNodeIRI, `${SH}or`);
         if (orHead) {
           const entries = walkRdfList(index, orHead);
           const refs = [];
+          const dts = [];
           for (const entry of entries) {
-            const nested = getOne(index, entry, `${SH}node`);
-            if (nested) refs.push(localName(nested, base));
+            const nestedNode = getOne(index, entry, `${SH}node`);
+            if (nestedNode) refs.push(localName(nestedNode, base));
+            const nestedDt = getOne(index, entry, `${SH}datatype`);
+            if (nestedDt) dts.push(compactIRI(nestedDt, namespaces, base));
           }
           if (refs.length > 0) {
             stmt.description = refs.length === 1 ? refs[0] : refs;
+          }
+          if (dts.length > 0) {
+            stmt.datatype = dts.length === 1 ? dts[0] : dts;
           }
         }
 

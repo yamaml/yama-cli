@@ -29,7 +29,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // ShExC serialization helpers
@@ -91,13 +91,17 @@ function formatNodeConstraint(stmt) {
   // Shape reference(s) take precedence. Multi-shape becomes a
   // parenthesised disjunction using ShEx's OR operator.
   const refs = descRefs(stmt);
+  const dts = datatypes(stmt);
   if (refs.length === 1) {
     parts.push(`@<${refs[0]}>`);
   } else if (refs.length > 1) {
     parts.push(`(${refs.map((r) => `@<${r}>`).join(" OR ")})`);
-  } else if (stmt.datatype) {
+  } else if (dts.length === 1) {
     // Datatype constraint (already prefixed in YAMA, e.g. "xsd:string")
-    parts.push(stmt.datatype);
+    parts.push(dts[0]);
+  } else if (dts.length > 1) {
+    // Multi-datatype → ShEx node-constraint disjunction.
+    parts.push(`(${dts.join(" OR ")})`);
   } else if (Array.isArray(stmt.values) && stmt.values.length > 0) {
     // Value set
     const vals = stmt.values.map((v) => `"${v}"`).join(" ");

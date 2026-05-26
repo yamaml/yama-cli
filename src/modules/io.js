@@ -61,3 +61,37 @@ export function descRefs(stmtDef) {
   if (Array.isArray(d)) return d.filter((r) => typeof r === "string" && r.length > 0);
   return typeof d === "string" && d.length > 0 ? [d] : [];
 }
+
+/**
+ * Normalises a YAMAML statement's `datatype` field into an array of
+ * datatype CURIEs.
+ *
+ * Multi-datatype is endorsed by the SimpleDSP spec (§4.6 Table 16: a
+ * space-separated list expresses a union of `owl:onDataRange` values)
+ * and used in practice by DCMI's SRAP profile for DCTAP. YAMAML
+ * accepts the field as:
+ *   - a scalar string (legacy single-datatype YAML),
+ *   - a space-separated string (DCTAP/SimpleDSP idiom imported verbatim),
+ *   - a sequence of strings (the canonical multi-datatype YAML shape).
+ *
+ * This helper turns any of those into a flat array of trimmed,
+ * non-empty datatype tokens — empty when none.
+ *
+ * @param {{ datatype?: string | string[] | null | undefined }} stmtDef
+ * @returns {string[]}
+ */
+export function datatypes(stmtDef) {
+  const d = stmtDef?.datatype;
+  if (!d) return [];
+  if (Array.isArray(d)) {
+    return d
+      .filter((x) => typeof x === "string")
+      .flatMap((x) => x.split(/\s+/))
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  if (typeof d === "string") {
+    return d.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+  }
+  return [];
+}
