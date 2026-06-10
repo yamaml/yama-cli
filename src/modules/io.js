@@ -27,6 +27,23 @@ export async function readInput(path) {
 }
 
 /**
+ * Writes bytes to stdout, looping until every byte is written.
+ *
+ * `Deno.stdout.writeSync` may perform a short write (especially when
+ * stdout is a pipe), silently truncating large outputs. This helper
+ * retries until the whole buffer is flushed.
+ *
+ * @param {Uint8Array} bytes - Encoded output to write.
+ * @returns {void}
+ */
+export function writeStdoutSync(bytes) {
+  let written = 0;
+  while (written < bytes.length) {
+    written += Deno.stdout.writeSync(bytes.subarray(written));
+  }
+}
+
+/**
  * Reads binary content from a local file or URL.
  *
  * @param {string} path - Local file path or HTTP(S) URL.
