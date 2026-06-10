@@ -51,11 +51,22 @@
  */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
-import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
+import { parse as parseCsv } from "@std/csv";
 import * as XLSX from "xlsx";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { datatypes, descRefs, readInput, readInputBytes } from "./io.js";
+import {
+  datatypes,
+  descRefs,
+  readInput,
+  readInputBytes,
+  writeStdoutSync,
+} from "./io.js";
+import {
+  collectUsedStandardPrefixes,
+  expandPrefixed,
+  STANDARD_PREFIXES,
+} from "./prefixes.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -82,11 +93,10 @@ const DSP_VALUE_URI_OCCURRENCE = namedNode(`${DSP}valueURIOccurrence`);
 const DSP_CARDINALITY_NOTE = namedNode(`${DSP}cardinalityNote`);
 const DSP_IN_SCHEME = namedNode(`${DSP}inScheme`);
 const DSP_PROPERTY_MAPPING = namedNode(`${DSP}propertyMapping`);
+// Note: the OWL-DSP spec also defines dsp:perLangMaxCardinality, but
+// YAMAML has no element that maps to it, so it is not emitted.
 const DSP_LANG_TAG_OCCURRENCE = namedNode(`${DSP}langTagOccurrence`);
-const DSP_PER_LANG_MAX_CARD = namedNode(`${DSP}perLangMaxCardinality`);
 
-const OWL_CLASS = namedNode(`${OWL}Class`);
-const OWL_RESTRICTION = namedNode(`${OWL}Restriction`);
 const OWL_ON_PROPERTY = namedNode(`${OWL}onProperty`);
 const OWL_ON_CLASS = namedNode(`${OWL}onClass`);
 const OWL_ON_DATA_RANGE = namedNode(`${OWL}onDataRange`);
@@ -108,62 +118,25 @@ const RDFS_LITERAL = namedNode(`${RDFS}Literal`);
 const XSD_NON_NEGATIVE_INTEGER = namedNode(`${XSD}nonNegativeInteger`);
 
 // ---------------------------------------------------------------------------
-// Standard prefix table (Table 19 from spec + schema: extension)
-// ---------------------------------------------------------------------------
-
-const STANDARD_PREFIXES = {
-  dc: "http://purl.org/dc/elements/1.1/",
-  dcterms: "http://purl.org/dc/terms/",
-  foaf: "http://xmlns.com/foaf/0.1/",
-  skos: "http://www.w3.org/2004/02/skos/core#",
-  xl: "http://www.w3.org/2008/05/skos-xl#",
-  rdf: RDF,
-  rdfs: RDFS,
-  owl: OWL,
-  xsd: XSD,
-  schema: "https://schema.org/",
-};
-
-// ---------------------------------------------------------------------------
-// IRI helpers
+// Shared value normalisation
 // ---------------------------------------------------------------------------
 
 /**
- * Expands a prefixed term to a full IRI.
+ * Normalises an `inScheme` entry to a string.
  *
- * @param {string} term
- * @param {Object} namespaces
- * @param {string} base
- * @returns {string|null}
- */
-function expandPrefixed(term, namespaces, base) {
-  if (!term) return null;
-  if (/^(https?|urn):/.test(term)) return term;
-
-  const colon = term.indexOf(":");
-  if (colon >= 0) {
-    const prefix = term.substring(0, colon);
-    const local = term.substring(colon + 1);
-    if (namespaces[prefix]) return namespaces[prefix] + local;
-  }
-
-  return base ? base + term : term;
-}
-
-/**
- * Compresses a full IRI to prefixed form if possible.
+ * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
+ * rather than the string `"ndlsh:"` (the YAMAML spec's §4.5 list
+ * example does exactly this); without normalisation those objects
+ * crash CURIE expansion and stringify as `[object Object]` in
+ * SimpleDSP cells.
  *
- * @param {string} iri
- * @param {Object} namespaces
+ * @param {string|Object} s
  * @returns {string}
  */
-function compressPrefixed(iri, namespaces) {
-  for (const [prefix, ns] of Object.entries(namespaces)) {
-    if (iri.startsWith(ns)) {
-      return `${prefix}:${iri.substring(ns.length)}`;
-    }
-  }
-  return iri;
+function normalizeScheme(s) {
+  if (typeof s === "string") return s;
+  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
+  return String(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,18 +192,46 @@ function resolveSimpleDspValueType(stmtDef) {
 /**
  * Resolves the SimpleDSP value constraint for a statement.
  *
+ * Inexpressible constraints (pattern, facets, languageTag, a picklist
+ * shadowed by a datatype) produce one-line warnings on stderr instead
+ * of vanishing silently.
+ *
  * @param {Object} stmtDef
- * @param {Object} namespaces
+ * @param {string} stmtName       - Statement name for warning messages.
+ * @param {string} firstDescName  - Name of the first description (renamed
+ *                                  to MAIN on export); refs to it are
+ *                                  rewritten to `#MAIN`.
  * @returns {string}
  */
-function resolveSimpleDspConstraint(stmtDef, namespaces) {
+function resolveSimpleDspConstraint(stmtDef, stmtName, firstDescName) {
+  // Constraints SimpleDSP has no column for — warn, never drop silently.
+  if (stmtDef.pattern) {
+    console.warn(
+      `Warning: statement "${stmtName}": pattern cannot be expressed in SimpleDSP — dropped.`,
+    );
+  }
+  if (stmtDef.facets && Object.keys(stmtDef.facets).length > 0) {
+    console.warn(
+      `Warning: statement "${stmtName}": facets cannot be expressed in SimpleDSP — dropped.`,
+    );
+  }
+  if (Array.isArray(stmtDef.languageTag) && stmtDef.languageTag.length > 0) {
+    console.warn(
+      `Warning: statement "${stmtName}": languageTag cannot be expressed in SimpleDSP — dropped.`,
+    );
+  }
+
   // Structured: shape reference(s). SimpleDSP spec has no disjunction
   // syntax — we emit space-separated `#A #B` as a yama-cli extension so
   // multi-shape profiles at least round-trip through SimpleDSP when
   // consumed by yama-cli itself. Strict consumers read the first ref.
+  // The first description is renamed to [MAIN] on export, so refs to
+  // it (including self-references) are rewritten to `#MAIN`.
   const refs = descRefs(stmtDef);
   if (refs.length > 0) {
-    return refs.map((r) => `#${r}`).join(" ");
+    return refs
+      .map((r) => (r === firstDescName ? "#MAIN" : `#${r}`))
+      .join(" ");
   }
 
   // Structured: class constraint (e.g. foaf:Agent) — per spec Table 17
@@ -242,16 +243,24 @@ function resolveSimpleDspConstraint(stmtDef, namespaces) {
   // Datatype constraint — multi-datatype is spec-endorsed (§4.6 Table 16)
   // and serialised as a space-separated list in the Constraint cell.
   if (stmtDef.datatype) {
+    if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
+      console.warn(
+        `Warning: statement "${stmtName}": SimpleDSP cannot express both a datatype and a picklist — picklist dropped.`,
+      );
+    }
     if (Array.isArray(stmtDef.datatype)) return stmtDef.datatype.join(" ");
     return stmtDef.datatype;
   }
 
-  // Vocabulary scheme (inScheme) — check before values since both may exist
+  // Vocabulary scheme (inScheme) — SimpleDSP Table 18 allows schemes
+  // (trailing `:`) and specific URIs to share the Constraint cell, so
+  // a statement with both inScheme and values emits both.
   if (stmtDef.inScheme) {
-    const schemes = Array.isArray(stmtDef.inScheme)
+    const schemes = (Array.isArray(stmtDef.inScheme)
       ? stmtDef.inScheme
-      : [stmtDef.inScheme];
-    return schemes.map((s) => `${s}`).join(" ");
+      : [stmtDef.inScheme]).map(normalizeScheme);
+    const uris = Array.isArray(stmtDef.values) ? stmtDef.values : [];
+    return [...schemes, ...uris].join(" ");
   }
 
   // Value set — for literal type, quote values; for reference type, don't
@@ -289,6 +298,26 @@ const VALUE_TYPE_JP = {
 // ---------------------------------------------------------------------------
 // SimpleDSP generator
 // ---------------------------------------------------------------------------
+
+/**
+ * Sanitises a value for a positional TSV cell.
+ *
+ * Tabs and newlines inside a cell would silently corrupt the row
+ * structure (SimpleDSP columns are positional), so they collapse to
+ * a single space with a warning naming the context.
+ *
+ * @param {*}      value   - Raw cell value.
+ * @param {string} context - Statement/row name for the warning.
+ * @returns {string}
+ */
+function sanitiseCell(value, context) {
+  const s = String(value ?? "");
+  if (!/[\t\r\n]/.test(s)) return s;
+  console.warn(
+    `Warning: "${context}": tab/newline characters in a SimpleDSP cell were replaced with spaces.`,
+  );
+  return s.replace(/[\t\r\n]+/g, " ");
+}
 
 /**
  * Generates SimpleDSP text output from a parsed YAMA document.
@@ -337,9 +366,6 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
     lines.push("");
   }
 
-  // All namespaces for prefix compression (merge standard + custom)
-  const allNs = { ...STANDARD_PREFIXES, ...namespaces };
-
   const descEntries = Object.entries(descriptions);
   const firstDescName = descEntries.length > 0 ? descEntries[0][0] : null;
 
@@ -354,15 +380,17 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
     const statements = descDef.statements || {};
 
     // ID statement — per spec 6.2.4, every description block should have one.
-    // Emit when the YAML has an id: mapping or a class (a:).
+    // Emit when the YAML has an id: mapping or a class (a:). For
+    // descriptions with only `a` (no identifier field) the Name cell
+    // stays empty so a round-trip does not invent an `id:` mapping.
     if (descDef.id || descDef.a) {
-      const idPath = descDef.id?.mapping?.path || "ID";
+      const idPath = descDef.id ? (descDef.id.mapping?.path || "ID") : "";
       const idClass = descDef.a || "";
       let idConstraint = "";
       if (descDef.id?.prefix) {
         idConstraint = `${descDef.id.prefix}:`;
       }
-      const idComment = descDef.note || "";
+      const idComment = sanitiseCell(descDef.note || "", descName);
       const vtId = "ID";
       lines.push(
         `${idPath}\t${idClass}\t1\t1\t${vtId}\t${idConstraint}\t${idComment}`,
@@ -370,7 +398,7 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
     }
 
     for (const [stmtKey, stmtDef] of Object.entries(statements)) {
-      const stmtName = stmtDef.label || stmtKey;
+      const stmtName = sanitiseCell(stmtDef.label || stmtKey, stmtKey);
       const property = stmtDef.property || "";
       // Keyword occurrences (e.g. "推奨") are stored in cardinalityNote;
       // use keyword as min, and preserve max if explicitly set.
@@ -380,8 +408,11 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
       const max = stmtDef.max != null ? String(stmtDef.max) : "-";
       const valueTypeEn = resolveSimpleDspValueType(stmtDef);
       const valueType = isJp ? (VALUE_TYPE_JP[valueTypeEn] ?? valueTypeEn) : valueTypeEn;
-      const constraint = resolveSimpleDspConstraint(stmtDef, allNs);
-      const comment = stmtDef.note || "";
+      const constraint = sanitiseCell(
+        resolveSimpleDspConstraint(stmtDef, stmtName, firstDescName),
+        stmtKey,
+      );
+      const comment = sanitiseCell(stmtDef.note || "", stmtKey);
 
       lines.push(
         `${stmtName}\t${property}\t${min}\t${max}\t${valueType}\t${constraint}\t${comment}`,
@@ -397,17 +428,6 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
 // ---------------------------------------------------------------------------
 // SimpleDSP tabular I/O helpers
 // ---------------------------------------------------------------------------
-
-/** SimpleDSP column headers for tabular export. */
-const SIMPLE_DSP_COLUMNS = [
-  "Name",
-  "Property",
-  "Min",
-  "Max",
-  "ValueType",
-  "Constraint",
-  "Comment",
-];
 
 /**
  * Infers tabular format from file extension.
@@ -430,19 +450,43 @@ function inferTabularFormat(path) {
  * @returns {{blocks: Array<{id: string, rows: Object[]}>, namespaces: Object}}
  */
 function parseSimpleDspText(text) {
-  const lines = text.split(/\r?\n/);
+  // Cells are split from the raw line — trimming the line first
+  // would swallow a leading tab and shift every column when the
+  // first cell is empty.
+  const rows = text.split(/\r?\n/).map((line) => line.split("\t"));
+  return parseSimpleDspRows(rows);
+}
+
+/**
+ * Parses SimpleDSP rows (arrays of cells) into blocks and namespaces.
+ *
+ * Shared core for the TSV, CSV, and Excel paths. Working on cell
+ * arrays rather than text lines means quoted newlines inside CSV
+ * fields and multi-line Excel cells survive parsing.
+ *
+ * Block markers are recognised even when padded with empty cells by
+ * spreadsheet exports (e.g. `[MAIN],,,,`).
+ *
+ * @param {Array<Array<*>>} rows - Rows of raw cell values.
+ * @returns {{blocks: Array<{id: string, rows: Object[]}>, namespaces: Object}}
+ */
+function parseSimpleDspRows(rows) {
   const namespaces = {};
   const blocks = [];
   let currentBlock = null;
   let inNsBlock = false;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+  for (const rawCells of rows) {
+    const cells = rawCells.map((c) => String(c ?? ""));
+    const first = (cells[0] || "").trim();
+    const restEmpty = cells.slice(1).every((c) => c.trim() === "");
 
-    // Block header
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      const blockId = trimmed.slice(1, -1);
+    // Blank row
+    if (first === "" && restEmpty) continue;
+
+    // Block marker (possibly padded with empty cells)
+    if (first.startsWith("[") && first.endsWith("]") && restEmpty) {
+      const blockId = first.slice(1, -1);
       if (blockId === "@NS") {
         inNsBlock = true;
         currentBlock = null;
@@ -455,18 +499,17 @@ function parseSimpleDspText(text) {
     }
 
     // Comment line (header row)
-    if (trimmed.startsWith("#")) continue;
+    if (first.startsWith("#")) continue;
 
     if (inNsBlock) {
-      const parts = trimmed.split(/\t+/);
+      const parts = cells.map((c) => c.trim()).filter(Boolean);
       if (parts.length >= 2) {
-        namespaces[parts[0].trim()] = parts[1].trim();
+        namespaces[parts[0]] = parts[1];
       }
       continue;
     }
 
     if (currentBlock) {
-      const cells = trimmed.split("\t");
       currentBlock.rows.push({
         Name: (cells[0] || "").trim(),
         Property: (cells[1] || "").trim(),
@@ -503,16 +546,11 @@ export function simpleDspToYama(blocks, parsedNs) {
     }
   }
   if (base) doc.base = base;
-  if (Object.keys(namespaces).length > 0) doc.namespaces = namespaces;
 
   const descriptions = {};
-  let isFirst = true;
 
   for (const block of blocks) {
-    const descName = block.id === "MAIN" && isFirst
-      ? "MAIN"
-      : block.id;
-    isFirst = false;
+    const descName = block.id;
 
     const descDef = {};
     const statements = {};
@@ -523,7 +561,11 @@ export function simpleDspToYama(blocks, parsedNs) {
       const property = row.Property;
       const minStr = row.Min;
       const maxStr = row.Max;
-      const valueType = (row.ValueType || "").toLowerCase();
+      // Some Excel exports write the value type as `"ID"` with literal
+      // quotes — the spec says parsers should strip them.
+      const valueType = (row.ValueType || "")
+        .replace(/^"(.*)"$/, "$1")
+        .toLowerCase();
       const constraint = row.Constraint || "";
       const comment = row.Comment || "";
 
@@ -538,11 +580,16 @@ export function simpleDspToYama(blocks, parsedNs) {
       };
       const normalizedValueType = jpMap[valueType] || valueType;
 
-      // ID statement — defines the record's identity
+      // ID statement — defines the record's identity. An empty Name
+      // cell means the row only declares the record class (a-only
+      // description) and no identifier mapping is invented for it.
       if (normalizedValueType === "id") {
-        descDef.id = { mapping: { path: stmtName || "ID" } };
+        if (stmtName) {
+          descDef.id = { mapping: { path: stmtName } };
+        }
         if (property) descDef.a = property;
         if (constraint) {
+          if (!descDef.id) descDef.id = {};
           // ID constraint is a namespace prefix reference (e.g. "ndlbooks:")
           // or a full URI. Per SimpleDSP spec, it should be a declared prefix.
           const trimmed = constraint.replace(/:$/, "");
@@ -551,7 +598,9 @@ export function simpleDspToYama(blocks, parsedNs) {
           if (allNs[trimmed]) {
             descDef.id.prefix = trimmed;
           } else if (constraint.startsWith("http://") || constraint.startsWith("https://")) {
-            // Full URI — find or create a matching prefix
+            // Full URI — find or mint a matching prefix. The record
+            // namespace must stay distinct from the schema namespace
+            // (spec §3.2), so it is never folded into doc.base.
             let foundPrefix = "";
             for (const [pfx, uri] of Object.entries(allNs)) {
               if (uri === constraint || uri === constraint.replace(/:$/, "")) {
@@ -562,9 +611,13 @@ export function simpleDspToYama(blocks, parsedNs) {
             if (foundPrefix) {
               descDef.id.prefix = foundPrefix;
             } else {
-              // No matching prefix; store the full URI as a fallback in base
-              // (backward compatibility for files that use full URIs)
-              if (!doc.base) doc.base = constraint;
+              let minted = "idns";
+              let n = 2;
+              while (allNs[minted] || namespaces[minted]) {
+                minted = `idns${n++}`;
+              }
+              namespaces[minted] = constraint;
+              descDef.id.prefix = minted;
             }
           } else if (trimmed) {
             // Prefix-like constraint — store as prefix
@@ -697,6 +750,28 @@ export function simpleDspToYama(blocks, parsedNs) {
     descriptions[descName] = descDef;
   }
 
+  // `#MAIN` references resolve to the first block. When the first
+  // block carries a different ID (lenient parse of a non-conforming
+  // file), rewrite dangling MAIN refs to that block's name.
+  const firstBlockName = blocks.length > 0 ? blocks[0].id : null;
+  if (firstBlockName && firstBlockName !== "MAIN" && !descriptions.MAIN) {
+    for (const descDef of Object.values(descriptions)) {
+      for (const stmt of Object.values(descDef.statements || {})) {
+        if (stmt.description === "MAIN") {
+          stmt.description = firstBlockName;
+        } else if (Array.isArray(stmt.description)) {
+          stmt.description = stmt.description.map((r) =>
+            r === "MAIN" ? firstBlockName : r
+          );
+        }
+      }
+    }
+  }
+
+  // Set after block processing so prefixes minted for full-URI ID
+  // constraints are included.
+  if (Object.keys(namespaces).length > 0) doc.namespaces = namespaces;
+
   doc.descriptions = descriptions;
   return doc;
 }
@@ -714,40 +789,6 @@ function parseCardinality(val) {
   if (!val || val === "-") return null;
   const n = parseInt(val, 10);
   return Number.isNaN(n) ? null : n;
-}
-
-/**
- * Splits a single CSV line into fields, handling quoted fields.
- *
- * @param {string} line
- * @returns {string[]}
- */
-function splitCsvLine(line) {
-  const fields = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      fields.push(current);
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  fields.push(current);
-  return fields;
 }
 
 /**
@@ -778,8 +819,10 @@ export async function readSimpleDsp(file) {
   const fmt = inferTabularFormat(file);
 
   if (fmt === "xlsx") {
-    // SimpleDSP Excel: single sheet with block markers as rows
-    // Same structure as TSV but laid out in a spreadsheet
+    // SimpleDSP Excel: single sheet with block markers as rows.
+    // Same structure as TSV but laid out in a spreadsheet — rows are
+    // handed to the shared parser as cell arrays so multi-line cell
+    // values survive.
     const data = await readInputBytes(file);
     const workbook = XLSX.read(data, { type: "array" });
     const sheetName = workbook.SheetNames[0];
@@ -787,26 +830,15 @@ export async function readSimpleDsp(file) {
       workbook.Sheets[sheetName],
       { header: 1, defval: "" },
     );
-    // Reconstruct as tab-separated text and parse with shared logic
-    const text = rawRows
-      .map((row) => row.map((c) => String(c ?? "")).join("\t"))
-      .join("\n");
-    return parseSimpleDspText(text);
+    return parseSimpleDspRows(rawRows);
   }
 
   const text = await readInput(file);
 
   if (fmt === "csv") {
-    // Convert CSV to tab-separated before parsing with shared logic
-    const lines = text.split(/\r?\n/);
-    const tsvLines = lines.map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("[") || trimmed.startsWith("#")) {
-        return trimmed;
-      }
-      return splitCsvLine(trimmed).join("\t");
-    });
-    return parseSimpleDspText(tsvLines.join("\n"));
+    // Quote-aware RFC 4180 parsing — quoted fields may contain
+    // newlines, which a line-by-line splitter would sever mid-field.
+    return parseSimpleDspRows(parseCsv(text));
   }
 
   // Native TSV (tab-separated with block markers)
@@ -838,14 +870,14 @@ function writeSimpleDspTabular(simpleDspText, output) {
   let text = simpleDspText;
   if (fmt === "csv") {
     // Convert tab-separated internal format to comma-separated CSV.
-    // Fields that contain commas, quotes, or newlines are quoted.
+    // Fields that contain commas, quotes, or line breaks are quoted.
     text = simpleDspText
       .split(/\r?\n/)
       .map((line) => {
         return line
           .split("\t")
           .map((cell) => {
-            if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+            if (/[",\r\n]/.test(cell)) {
               return `"${cell.replace(/"/g, '""')}"`;
             }
             return cell;
@@ -859,7 +891,7 @@ function writeSimpleDspTabular(simpleDspText, output) {
     Deno.writeTextFileSync(output, text);
     console.error(`Written to ${output}`);
   } else {
-    Deno.stdout.writeSync(new TextEncoder().encode(text));
+    writeStdoutSync(new TextEncoder().encode(text));
   }
 }
 
@@ -878,7 +910,6 @@ function writeSimpleDspTabular(simpleDspText, output) {
  *   - datatype via owl:onDataRange
  *   - shape ref via owl:onClass
  *
- * @param {NamedNode} descNode - Parent DescriptionTemplate IRI.
  * @param {string}   descName   - Description name for building statement IRIs.
  * @param {string}   stmtKey    - Statement key.
  * @param {Object}   stmtDef    - Statement definition.
@@ -888,7 +919,6 @@ function writeSimpleDspTabular(simpleDspText, output) {
  * @returns {NamedNode} The statement template node.
  */
 function buildStatementTemplate(
-  descNode,
   descName,
   stmtKey,
   stmtDef,
@@ -961,6 +991,21 @@ function buildStatementTemplate(
     );
   }
 
+  // languageTag → dsp:langTagOccurrence "mandatory". OWL-DSP can
+  // require a language tag on plain-literal values but cannot
+  // restrict which tags are allowed, so the specific list is noted
+  // in a warning rather than dropped silently.
+  if (Array.isArray(stmtDef.languageTag) && stmtDef.languageTag.length > 0) {
+    quads.push(
+      quad(stmtNode, DSP_LANG_TAG_OCCURRENCE, literal("mandatory")),
+    );
+    console.warn(
+      `Warning: statement "${stmtKey}": OWL-DSP cannot restrict specific language tags (${
+        stmtDef.languageTag.join(", ")
+      }) — emitted dsp:langTagOccurrence "mandatory" only.`,
+    );
+  }
+
   // Value type: datatype → owl:onDataRange
   // Multi-datatype is normalised via `datatypes()` which accepts both
   // scalar (legacy) and array (post-multi-datatype) YAML shapes.
@@ -977,6 +1022,13 @@ function buildStatementTemplate(
     const unionAnon = blankNode();
     quads.push(quad(unionAnon, namedNode(`${OWL}unionOf`), listHead));
     quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, unionAnon));
+  } else if (
+    (stmtDef.type || "").toUpperCase() === "LITERAL" &&
+    !(Array.isArray(stmtDef.values) && stmtDef.values.length > 0)
+  ) {
+    // Unconstrained literal — SimpleDSP Table 16 maps an empty
+    // constraint to owl:onDataRange rdfs:Literal.
+    quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, RDFS_LITERAL));
   }
 
   // Value type: structured → owl:onClass (shape reference(s))
@@ -1010,11 +1062,14 @@ function buildStatementTemplate(
     }
   }
 
-  // Value constraint: inScheme (vocabulary constraint)
+  // Value constraint: inScheme (vocabulary constraint). Entries are
+  // normalised first — the spec's own §4.5 list form (`- ndlsh:`)
+  // parses to `{ ndlsh: null }` objects, which would crash CURIE
+  // expansion.
   if (stmtDef.inScheme) {
-    const schemes = Array.isArray(stmtDef.inScheme)
+    const schemes = (Array.isArray(stmtDef.inScheme)
       ? stmtDef.inScheme
-      : [stmtDef.inScheme];
+      : [stmtDef.inScheme]).map(normalizeScheme);
 
     if (schemes.length === 1) {
       const schemeIri = expandPrefixed(schemes[0], namespaces, base);
@@ -1131,7 +1186,6 @@ function buildDspQuads(doc, namespaces, base) {
 
     for (const [stmtKey, stmtDef] of Object.entries(statements)) {
       const stmtNode = buildStatementTemplate(
-        descNode,
         descName,
         stmtKey,
         stmtDef,
@@ -1170,16 +1224,20 @@ function buildDspQuads(doc, namespaces, base) {
 export async function generateDSP(file, { output = "", format = "turtle" } = {}) {
   const doc = parseYaml(await readInput(file));
 
-  // Resolution namespaces include standard fallbacks for CURIE expansion,
-  // but the output prefix map contains only what the user declared plus dsp
-  // (emitted because this module uses it). Standard prefixes are never
-  // eagerly added to output — the user's namespaces block is authoritative.
+  // Resolution namespaces include standard fallbacks for CURIE
+  // expansion (YAMAML §2.2). The output prefix map contains the
+  // user's declarations, dsp (this module always uses it), and any
+  // standard prefixes that actually resolved into the quads.
   const userNamespaces = doc.namespaces || {};
   const resolutionNamespaces = { ...STANDARD_PREFIXES, ...userNamespaces };
-  const outputNamespaces = { dsp: DSP, ...userNamespaces };
   const base = doc.base || "";
 
   const quads = buildDspQuads(doc, resolutionNamespaces, base);
+  const outputNamespaces = {
+    dsp: DSP,
+    ...userNamespaces,
+    ...collectUsedStandardPrefixes(quads, { dsp: DSP, ...userNamespaces }),
+  };
   await serializeRdf(quads, outputNamespaces, base, output, format);
 }
 
