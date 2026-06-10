@@ -24,7 +24,7 @@
  * | statement.datatype      | sh:datatype                  |
  * | statement.type (IRI)    | sh:nodeKind sh:IRI           |
  * | statement.type (literal)| sh:nodeKind sh:Literal       |
- * | statement.type (BNODE)  | sh:nodeKind sh:BlankNodeOrIRI|
+ * | statement.type (BNODE)  | sh:nodeKind sh:BlankNode     |
  * | statement.description (single) | sh:node (shape reference)    |
  * | statement.description (many)   | sh:or ([sh:node ... ])       |
  * | statement.a              | sh:class                     |
@@ -98,7 +98,7 @@ const SH_PATTERN          = namedNode(`${SH}pattern`);
 const SH_IN               = namedNode(`${SH}in`);
 const SH_IRI              = namedNode(`${SH}IRI`);
 const SH_LITERAL          = namedNode(`${SH}Literal`);
-const SH_BLANK_NODE_OR_IRI = namedNode(`${SH}BlankNodeOrIRI`);
+const SH_BLANK_NODE       = namedNode(`${SH}BlankNode`);
 const SH_CLOSED           = namedNode(`${SH}closed`);
 const SH_IGNORED_PROPERTIES = namedNode(`${SH}ignoredProperties`);
 const SH_OR               = namedNode(`${SH}or`);
@@ -143,7 +143,9 @@ function resolveNodeKind(type) {
     case "LITERAL":
       return SH_LITERAL;
     case "BNODE":
-      return SH_BLANK_NODE_OR_IRI;
+      // sh:BlankNode exactly — emitting the looser sh:BlankNodeOrIRI
+      // would not round-trip through the from-shacl importer.
+      return SH_BLANK_NODE;
     default:
       return null;
   }
