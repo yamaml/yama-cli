@@ -9,6 +9,7 @@
  */
 
 import N3 from "n3";
+import { writeStdoutSync } from "./io.js";
 
 /**
  * @typedef {Quad} Quad
@@ -61,7 +62,12 @@ function quadsToJsonLd(quads, namespaces, base) {
   const subjects = new Map();
 
   for (const q of quads) {
-    const sid = q.subject.value;
+    // Blank-node subjects need the `_:` prefix in JSON-LD — a bare
+    // N3 label like "n3-0" would be read as a relative IRI and
+    // disconnect the graph from objects that reference "_:n3-0".
+    const sid = q.subject.termType === "BlankNode"
+      ? `_:${q.subject.value}`
+      : q.subject.value;
     if (!subjects.has(sid)) {
       subjects.set(sid, { "@id": sid });
     }
@@ -136,7 +142,7 @@ export function serializeRdf(quads, namespaces, base, output, format) {
       Deno.writeTextFileSync(output, result);
       console.error(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(new TextEncoder().encode(result));
+      writeStdoutSync(new TextEncoder().encode(result));
     }
     return Promise.resolve();
   }
@@ -157,13 +163,19 @@ export function serializeRdf(quads, namespaces, base, output, format) {
     writer.end((error, result) => {
       if (error) return reject(error);
 
-      if (output) {
-        Deno.writeTextFileSync(output, result);
-        console.error(`Written to ${output}`);
-      } else {
-        Deno.stdout.writeSync(new TextEncoder().encode(result));
+      // Exceptions thrown inside this callback are swallowed by the
+      // N3 writer, leaving the promise unsettled — reject explicitly.
+      try {
+        if (output) {
+          Deno.writeTextFileSync(output, result);
+          console.error(`Written to ${output}`);
+        } else {
+          writeStdoutSync(new TextEncoder().encode(result));
+        }
+        resolve();
+      } catch (err) {
+        reject(err);
       }
-      resolve();
     });
   });
 }
