@@ -93,15 +93,26 @@ const MEDIATYPE_MAP = {
  * @param {Object} stmtDef - Statement definition from the YAMA document.
  * @returns {{type: string, format?: string}}
  */
-function resolveFieldType(stmtDef) {
+function resolveFieldType(stmtDef, fieldName) {
   // Frictionless allows only one type per field. For multi-datatype
-  // statements we emit the first; warnings about the dropped extras
-  // are produced by the caller — this helper just picks a winner.
-  const first = datatypes(stmtDef)[0];
+  // statements we emit the first and report the dropped extras.
+  const dts = datatypes(stmtDef);
+  if (dts.length > 1) {
+    console.warn(
+      `Warning: field "${fieldName}": Frictionless fields have one type — kept ${
+        dts[0]
+      }, dropped ${dts.slice(1).join(", ")}.`,
+    );
+  }
+  const first = dts[0];
   if (first) {
     const local = first.includes(":") ? first.split(":").pop() : first;
     const mapped = XSD_TYPE_MAP[local];
     if (mapped) return { ...mapped };
+    console.warn(
+      `Warning: field "${fieldName}": datatype ${first} has no Frictionless mapping — falling back to string.`,
+    );
+    return { type: "string" };
   }
 
   const yamaType = (stmtDef.type || "").toUpperCase();
@@ -229,16 +240,31 @@ function collectResources(doc) {
 
       if (!stmtMapping?.path) continue;
 
-      // Only add fields from the same source
+      // Statements may read from a different source than the
+      // description's id mapping (spec §5.4) — those fields go into
+      // their own resource for that source instead of being dropped.
       const stmtSource = stmtMapping.source || defaults.mapping?.source;
-      if (stmtSource !== source) continue;
+      let targetResource = resource;
+      if (stmtSource !== source) {
+        if (!resources.has(stmtSource)) {
+          resources.set(stmtSource, {
+            source: stmtSource,
+            type: (stmtMapping.type || inferType(stmtSource)).toLowerCase(),
+            title: undefined,
+            description: undefined,
+            primaryKey: undefined,
+            fields: new Map(),
+          });
+        }
+        targetResource = resources.get(stmtSource);
+      }
 
       const fieldName = stmtMapping.path;
 
       // Don't overwrite an existing field with richer metadata
-      if (resource.fields.has(fieldName)) continue;
+      if (targetResource.fields.has(fieldName)) continue;
 
-      const fieldType = resolveFieldType(stmtDef);
+      const fieldType = resolveFieldType(stmtDef, fieldName);
       const field = {
         name: fieldName,
         type: fieldType.type,
@@ -261,7 +287,7 @@ function collectResources(doc) {
         field.constraints = constraints;
       }
 
-      resource.fields.set(fieldName, field);
+      targetResource.fields.set(fieldName, field);
     }
   }
 
@@ -277,6 +303,22 @@ function collectResources(doc) {
 function inferType(path) {
   const ext = path.split(".").pop().toLowerCase();
   return ext === "yml" ? "yaml" : ext;
+}
+
+/**
+ * Normalises a string to the Frictionless resource name pattern:
+ * lowercase alphanumerics plus `.`, `_`, and `-`. Any other
+ * character becomes `-`.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function toResourceName(s) {
+  const name = String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return name || "resource";
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +341,21 @@ function buildDataPackage(doc) {
   const resources = collectResources(doc);
   pkg.resources = [];
 
+  const usedNames = new Set();
+
   for (const [, res] of resources) {
+    // Resource names must match the Frictionless pattern (lowercase
+    // alphanumerics plus ._-) and be unique within the package.
+    let name = toResourceName(basename(res.source, `.${res.type}`));
+    if (usedNames.has(name)) {
+      let n = 2;
+      while (usedNames.has(`${name}-${n}`)) n++;
+      name = `${name}-${n}`;
+    }
+    usedNames.add(name);
+
     const resource = {
-      name: basename(res.source, `.${res.type}`),
+      name,
       path: res.source,
       type: "table",
       format: res.type,
