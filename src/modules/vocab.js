@@ -21,6 +21,11 @@ import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
 import { datatypes, descRefs, readInput } from "./io.js";
+import {
+  collectUsedStandardPrefixes,
+  expandPrefixed,
+  STANDARD_PREFIXES,
+} from "./prefixes.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, quad } = DataFactory;
@@ -36,7 +41,6 @@ const { namedNode, literal, quad } = DataFactory;
 const OWL = "http://www.w3.org/2002/07/owl#";
 const RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const RDFS = "http://www.w3.org/2000/01/rdf-schema#";
-const XSD = "http://www.w3.org/2001/XMLSchema#";
 
 const OWL_CLASS = namedNode(`${OWL}Class`);
 const OWL_OBJECT_PROPERTY = namedNode(`${OWL}ObjectProperty`);
@@ -48,49 +52,6 @@ const RDFS_LABEL = namedNode(`${RDFS}label`);
 const RDFS_COMMENT = namedNode(`${RDFS}comment`);
 const RDFS_DOMAIN = namedNode(`${RDFS}domain`);
 const RDFS_RANGE = namedNode(`${RDFS}range`);
-
-// ---------------------------------------------------------------------------
-// Standard prefix table
-// ---------------------------------------------------------------------------
-
-const STANDARD_PREFIXES = {
-  dc: "http://purl.org/dc/elements/1.1/",
-  dcterms: "http://purl.org/dc/terms/",
-  foaf: "http://xmlns.com/foaf/0.1/",
-  skos: "http://www.w3.org/2004/02/skos/core#",
-  xl: "http://www.w3.org/2008/05/skos-xl#",
-  rdf: RDF,
-  rdfs: RDFS,
-  owl: OWL,
-  xsd: XSD,
-  schema: "https://schema.org/",
-};
-
-// ---------------------------------------------------------------------------
-// IRI helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Expands a prefixed term to a full IRI.
- *
- * @param {string} term
- * @param {Object} namespaces
- * @param {string} base
- * @returns {string|null}
- */
-function expandPrefixed(term, namespaces, base) {
-  if (!term) return null;
-  if (/^(https?|urn):/.test(term)) return term;
-
-  const colon = term.indexOf(":");
-  if (colon >= 0) {
-    const prefix = term.substring(0, colon);
-    const local = term.substring(colon + 1);
-    if (namespaces[prefix]) return namespaces[prefix] + local;
-  }
-
-  return base ? base + term : term;
-}
 
 // ---------------------------------------------------------------------------
 // Vocabulary quad builder
@@ -186,7 +147,7 @@ function buildVocabQuads(doc, namespaces, base) {
 
       if (!record) {
         // First time seeing this property — emit type and metadata
-        record = { typed: false, labeled: false, commented: false, domains: new Set() };
+        record = { domainEmitted: false };
         emittedProperties.set(propertyIri, record);
 
         // rdf:type
@@ -197,19 +158,16 @@ function buildVocabQuads(doc, namespaces, base) {
         } else {
           quads.push(quad(propNode, RDF_TYPE, OWL_DATATYPE_PROPERTY));
         }
-        record.typed = true;
 
         // rdfs:label (from statement label or key)
         const label = stmtDef.label || stmtKey;
         if (label) {
           quads.push(quad(propNode, RDFS_LABEL, literal(label)));
-          record.labeled = true;
         }
 
         // rdfs:comment
         if (stmtDef.note) {
           quads.push(quad(propNode, RDFS_COMMENT, literal(stmtDef.note)));
-          record.commented = true;
         }
 
         // rdfs:range — single literal datatype. For multi-datatype the
@@ -244,10 +202,13 @@ function buildVocabQuads(doc, namespaces, base) {
         }
       }
 
-      // rdfs:domain (emit for each distinct domain class)
-      if (domainIri && !record.domains.has(domainIri)) {
+      // rdfs:domain — first-wins, matching the range behaviour above.
+      // Multiple rdfs:domain triples would be *intersected* under RDFS
+      // semantics (every subject must be an instance of all domains),
+      // which is not what a property shared across descriptions means.
+      if (domainIri && !record.domainEmitted) {
         quads.push(quad(propNode, RDFS_DOMAIN, namedNode(domainIri)));
-        record.domains.add(domainIri);
+        record.domainEmitted = true;
       }
     }
   }
@@ -274,14 +235,17 @@ function buildVocabQuads(doc, namespaces, base) {
 export async function generateVocab(file, { output = "", format = "turtle" } = {}) {
   const doc = parseYaml(await readInput(file));
 
-  // Resolution namespaces include standard fallbacks for CURIE expansion,
-  // but the output prefix map contains only what the user declared.
-  // Standard prefixes are never eagerly added to output — the user's
-  // namespaces block is authoritative.
+  // Resolution namespaces include standard fallbacks for CURIE
+  // expansion (YAMAML §2.2). The output declares the user's prefixes
+  // plus any standard ones that actually resolved into the quads.
   const userNamespaces = doc.namespaces || {};
   const resolutionNamespaces = { ...STANDARD_PREFIXES, ...userNamespaces };
   const base = doc.base || "";
 
   const quads = buildVocabQuads(doc, resolutionNamespaces, base);
-  await serializeRdf(quads, userNamespaces, base, output, format);
+  const outputNamespaces = {
+    ...userNamespaces,
+    ...collectUsedStandardPrefixes(quads, userNamespaces),
+  };
+  await serializeRdf(quads, outputNamespaces, base, output, format);
 }
