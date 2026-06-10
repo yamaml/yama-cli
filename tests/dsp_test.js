@@ -165,7 +165,7 @@ Deno.test("simpledsp: empty first cell does not shift TSV columns", async () => 
 
 Deno.test('simpledsp: quoted "ID" value type is stripped on import', async () => {
   const { blocks, namespaces } = await readSimpleDsp(
-    fixture("simpledsp-padded.csv"),
+    fixture("simpledsp-quoted-id.tsv"),
   );
   const doc = simpleDspToYama(blocks, namespaces);
   assertEquals(doc.descriptions.MAIN.id.mapping.path, "BookID");

@@ -1,0 +1,7 @@
+[@NS]
+dmm	http://example.org/dmm/
+
+[MAIN]
+#Name	Property	Min	Max	ValueType	Constraint	Comment
+BookID	foaf:Document	1	1	"ID"	dmm:
+Title	dcterms:title	1	1	literal	xsd:string	test note
