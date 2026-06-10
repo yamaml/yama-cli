@@ -49,8 +49,10 @@ import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
 import { datatypes, descRefs, readInput } from "./io.js";
 import {
+  buildRdfList,
   collectUsedStandardPrefixes,
   expandPrefixed,
+  normalizeScheme,
   STANDARD_PREFIXES,
 } from "./prefixes.js";
 
@@ -102,9 +104,6 @@ const SH_IGNORED_PROPERTIES = namedNode(`${SH}ignoredProperties`);
 const SH_OR               = namedNode(`${SH}or`);
 
 const RDF_TYPE             = namedNode(`${RDF}type`);
-const RDF_FIRST            = namedNode(`${RDF}first`);
-const RDF_REST             = namedNode(`${RDF}rest`);
-const RDF_NIL              = namedNode(`${RDF}nil`);
 
 const XSD_INTEGER          = namedNode(`${XSD}integer`);
 const XSD_DECIMAL          = namedNode(`${XSD}decimal`);
@@ -123,53 +122,6 @@ const XSD_BOOLEAN          = namedNode(`${XSD}boolean`);
  */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Normalises an `inScheme` entry to a string.
- *
- * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
- * rather than the string `"ndlsh:"`; this restores the intended
- * scheme reference.
- *
- * @param {string|Object} s
- * @returns {string}
- */
-function normalizeScheme(s) {
-  if (typeof s === "string") return s;
-  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
-  return String(s);
-}
-
-// ---------------------------------------------------------------------------
-// RDF list builder
-// ---------------------------------------------------------------------------
-
-/**
- * Builds an RDF list (rdf:first/rdf:rest chain) from an array of RDF terms.
- *
- * @param {Term[]}  items - Terms to include in the list.
- * @param {Quad[]}  quads - Accumulator for generated quads.
- * @returns {BlankNode|NamedNode} Head of the list.
- */
-function buildRdfList(items, quads) {
-  if (items.length === 0) return RDF_NIL;
-
-  const head = blankNode();
-  let current = head;
-
-  for (let i = 0; i < items.length; i++) {
-    quads.push(quad(current, RDF_FIRST, items[i]));
-    if (i < items.length - 1) {
-      const next = blankNode();
-      quads.push(quad(current, RDF_REST, next));
-      current = next;
-    } else {
-      quads.push(quad(current, RDF_REST, RDF_NIL));
-    }
-  }
-
-  return head;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,12 +153,13 @@ function resolveNodeKind(type) {
  * Builds SHACL quads for a single property shape from a YAMA statement.
  *
  * @param {NamedNode} shapeNode  - Parent NodeShape.
+ * @param {string}   stmtKey    - Statement key for warning messages.
  * @param {Object}   stmtDef    - Statement definition from the YAMA doc.
  * @param {Object}   namespaces - Prefix-to-IRI map.
  * @param {string}   base       - Document base IRI.
  * @param {Quad[]} quads - Accumulator.
  */
-function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
+function buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads) {
   const propertyIri = expandPrefixed(stmtDef.property, namespaces, base);
   if (!propertyIri) return;
 
@@ -336,7 +289,7 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
     }
     if (f.TotalDigits != null || f.FractionDigits != null) {
       console.warn(
-        `Warning: statement "${stmtDef.property}": TotalDigits/FractionDigits facets cannot be expressed in SHACL — dropped.`,
+        `Warning: statement "${stmtKey}": TotalDigits/FractionDigits facets cannot be expressed in SHACL — dropped.`,
       );
     }
   }
@@ -364,7 +317,7 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
     const stmtType = (stmtDef.type || "").toUpperCase();
     if (stmtType !== "IRI" && stmtType !== "URI") {
       console.warn(
-        `Warning: statement "${stmtDef.property}": inScheme on a non-IRI statement cannot be expressed in SHACL — dropped.`,
+        `Warning: statement "${stmtKey}": inScheme on a non-IRI statement cannot be expressed in SHACL — dropped.`,
       );
     } else {
       // A scheme like "ndlsh:" expands to the bare namespace IRI
@@ -452,8 +405,8 @@ function buildShaclQuads(doc, namespaces, base) {
     // Property shapes from statements
     if (!descDef.statements) continue;
 
-    for (const stmtDef of Object.values(descDef.statements)) {
-      buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads);
+    for (const [stmtKey, stmtDef] of Object.entries(descDef.statements)) {
+      buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads);
     }
   }
 

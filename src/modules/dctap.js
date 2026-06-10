@@ -50,6 +50,7 @@ import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
 import * as XLSX from "xlsx";
 import { readInput, readInputBytes, writeStdoutSync } from "./io.js";
+import { normalizeScheme } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
 // DCTAP column headers (canonical order)
@@ -77,6 +78,9 @@ const DCTAP_COLUMNS = [
 
 /**
  * Infers tabular format from a file extension.
+ *
+ * Intentionally duplicated in dsp.js: DCTAP's native format is CSV,
+ * so this copy defaults to csv while SimpleDSP's defaults to tsv.
  *
  * @param {string} path - File path.
  * @returns {"csv"|"tsv"|"xlsx"} Detected format.
@@ -253,11 +257,7 @@ function toValueConstraint(stmtDef, stmtName) {
       ? stmtDef.inScheme
       : [stmtDef.inScheme];
     // Normalize: YAML may parse `- ndlsh:` as { ndlsh: null } instead of "ndlsh:"
-    const schemes = raw.map((s) => {
-      if (typeof s === "string") return s;
-      if (s && typeof s === "object") return Object.keys(s)[0] + ":";
-      return String(s);
-    });
+    const schemes = raw.map(normalizeScheme);
     candidates.push({
       valueConstraint: joinConstraintValues(schemes, stmtName),
       valueConstraintType: "IRIstem",

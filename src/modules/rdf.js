@@ -450,7 +450,7 @@ async function buildQuads(ctx) {
 
     const idMapping = mergeMapping(descDef.id.mapping, ctx.defaults);
     if (!idMapping?.source || !idMapping?.path) {
-      console.error(`Warning: description "${descName}" has no id mapping source or path, skipping.`);
+      console.warn(`Warning: description "${descName}" has no id mapping source or path, skipping.`);
       continue;
     }
 

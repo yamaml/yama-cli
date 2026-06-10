@@ -33,7 +33,7 @@
 
 import { parse as parseYaml } from "@std/yaml";
 import { datatypes, descRefs, readInput } from "./io.js";
-import { STANDARD_PREFIXES } from "./prefixes.js";
+import { normalizeScheme, STANDARD_PREFIXES } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
 // ShExC serialization helpers
@@ -77,22 +77,6 @@ function escapeShExPattern(pattern) {
  */
 function escapeShExString(s) {
   return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-/**
- * Normalises an `inScheme` entry to a string.
- *
- * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
- * rather than the string `"ndlsh:"`; this restores the intended
- * scheme reference.
- *
- * @param {string|Object} s
- * @returns {string}
- */
-function normalizeScheme(s) {
-  if (typeof s === "string") return s;
-  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
-  return String(s);
 }
 
 /**
@@ -232,6 +216,10 @@ function formatNodeConstraint(stmt, ctx) {
     facetsAttached = true;
   } else if (dts.length > 1) {
     groups.push(`(${dts.map((d) => formatIriToken(d, ctx)).join(" OR ")})`);
+    // Facets cannot attach to a parenthesised datatype disjunction (the
+    // ShExC grammar binds them to a single node constraint), so they
+    // join as a separate AND group, constraining whichever datatype
+    // matched. Deliberate: facets apply to all alternatives at once.
     if (facetTokens.length) {
       groups.push(facetTokens.join(" "));
       facetsAttached = true;

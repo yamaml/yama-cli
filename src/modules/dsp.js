@@ -63,8 +63,10 @@ import {
   writeStdoutSync,
 } from "./io.js";
 import {
+  buildRdfList,
   collectUsedStandardPrefixes,
   expandPrefixed,
+  normalizeScheme,
   STANDARD_PREFIXES,
 } from "./prefixes.js";
 
@@ -106,9 +108,6 @@ const OWL_QUAL_CARD = namedNode(`${OWL}qualifiedCardinality`);
 const OWL_UNION_OF = namedNode(`${OWL}unionOf`);
 
 const RDF_TYPE = namedNode(`${RDF}type`);
-const RDF_FIRST = namedNode(`${RDF}first`);
-const RDF_REST = namedNode(`${RDF}rest`);
-const RDF_NIL = namedNode(`${RDF}nil`);
 
 const RDFS_SUBCLASS_OF = namedNode(`${RDFS}subClassOf`);
 const RDFS_LABEL = namedNode(`${RDFS}label`);
@@ -116,49 +115,6 @@ const RDFS_COMMENT = namedNode(`${RDFS}comment`);
 const RDFS_LITERAL = namedNode(`${RDFS}Literal`);
 
 const XSD_NON_NEGATIVE_INTEGER = namedNode(`${XSD}nonNegativeInteger`);
-
-// ---------------------------------------------------------------------------
-// Shared value normalisation
-// ---------------------------------------------------------------------------
-
-/**
- * Normalises an `inScheme` entry to a string.
- *
- * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
- * rather than the string `"ndlsh:"` (the YAMAML spec's §4.5 list
- * example does exactly this); without normalisation those objects
- * crash CURIE expansion and stringify as `[object Object]` in
- * SimpleDSP cells.
- *
- * @param {string|Object} s
- * @returns {string}
- */
-function normalizeScheme(s) {
-  if (typeof s === "string") return s;
-  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
-  return String(s);
-}
-
-// ---------------------------------------------------------------------------
-// RDF list builder
-// ---------------------------------------------------------------------------
-
-function buildRdfList(items, quads) {
-  if (items.length === 0) return RDF_NIL;
-  const head = blankNode();
-  let current = head;
-  for (let i = 0; i < items.length; i++) {
-    quads.push(quad(current, RDF_FIRST, items[i]));
-    if (i < items.length - 1) {
-      const next = blankNode();
-      quads.push(quad(current, RDF_REST, next));
-      current = next;
-    } else {
-      quads.push(quad(current, RDF_REST, RDF_NIL));
-    }
-  }
-  return head;
-}
 
 // ---------------------------------------------------------------------------
 // SimpleDSP value type resolution
@@ -431,6 +387,9 @@ function buildSimpleDsp(doc, { lang = "en" } = {}) {
 
 /**
  * Infers tabular format from file extension.
+ *
+ * Intentionally duplicated in dctap.js: SimpleDSP's native format is
+ * TSV, so this copy defaults to tsv while DCTAP's defaults to csv.
  *
  * @param {string} path
  * @returns {"tsv"|"csv"|"xlsx"}

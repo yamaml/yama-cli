@@ -12,8 +12,22 @@
  * declarations for the user-declared prefixes plus any standard
  * prefixes that actually resolved into the output.
  *
+ * Also hosts small value-normalisation and RDF-construction helpers
+ * shared by several generators ({@link normalizeScheme},
+ * {@link buildRdfList}).
+ *
  * @module prefixes
  */
+
+import N3 from "n3";
+
+const { DataFactory } = N3;
+const { namedNode, blankNode, quad } = DataFactory;
+
+const RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+const RDF_FIRST = namedNode(`${RDF}first`);
+const RDF_REST = namedNode(`${RDF}rest`);
+const RDF_NIL = namedNode(`${RDF}nil`);
 
 // ── Standard prefix table (SimpleDSP §7 / YAMAML §2.2) ──
 
@@ -66,6 +80,55 @@ export function expandPrefixed(term, namespaces, base) {
   }
 
   return base ? base + term : term;
+}
+
+// ── Shared value normalisation ──
+
+/**
+ * Normalises an `inScheme` entry to a string.
+ *
+ * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
+ * rather than the string `"ndlsh:"` (the YAMAML spec's §4.5 list
+ * example does exactly this); without normalisation those objects
+ * crash CURIE expansion and stringify as `[object Object]` in
+ * generator output.
+ *
+ * @param {string|Object} s
+ * @returns {string}
+ */
+export function normalizeScheme(s) {
+  if (typeof s === "string") return s;
+  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
+  return String(s);
+}
+
+// ── RDF list builder ──
+
+/**
+ * Builds an RDF list (rdf:first/rdf:rest chain) from an array of RDF terms.
+ *
+ * @param {Array} items - Terms to include in the list.
+ * @param {Array} quads - Accumulator for generated quads.
+ * @returns {*} Head of the list (blank node, or rdf:nil when empty).
+ */
+export function buildRdfList(items, quads) {
+  if (items.length === 0) return RDF_NIL;
+
+  const head = blankNode();
+  let current = head;
+
+  for (let i = 0; i < items.length; i++) {
+    quads.push(quad(current, RDF_FIRST, items[i]));
+    if (i < items.length - 1) {
+      const next = blankNode();
+      quads.push(quad(current, RDF_REST, next));
+      current = next;
+    } else {
+      quads.push(quad(current, RDF_REST, RDF_NIL));
+    }
+  }
+
+  return head;
 }
 
 // ── Output prefix collection ──
