@@ -28,10 +28,11 @@
 
 import { join } from "@std/path";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
-import { readInput } from "./io.js";
+import { descRefs, readInput } from "./io.js";
 import { readSimpleDsp, simpleDspToYama } from "./dsp.js";
 import { readTabular, rowsToYama } from "./dctap.js";
 import { generateHtmlReport, generateMarkdownReport } from "./report.js";
+import { VERSION } from "../version.js";
 
 // ---------------------------------------------------------------------------
 // Input parsing (multi-format, same logic as report command)
@@ -151,13 +152,14 @@ async function buildOverviewSvg(doc) {
   const edges = [];
   const edgeMap = new Map();
 
-  // Collect self-refs
+  // Collect self-refs — description may be a scalar or a list
+  // (multi-shape disjunction), so refs go through descRefs().
   const selfRefs = {};
   for (const name of descNames) {
     selfRefs[name] = [];
     const stmts = descriptions[name].statements || {};
     for (const [sk, sd] of Object.entries(stmts)) {
-      if (sd.description === name) {
+      if (descRefs(sd).includes(name)) {
         const propName = compactIRI(sd.property) || sk;
         selfRefs[name].push({ prop: propName, card: fmtCard(sd.min, sd.max) });
       }
@@ -191,14 +193,16 @@ async function buildOverviewSvg(doc) {
 
     const stmts = def.statements || {};
     for (const [sk, sd] of Object.entries(stmts)) {
-      if (sd.description && sd.description !== name && descNames.includes(sd.description)) {
+      // Multi-shape statements draw one edge per referenced shape.
+      for (const ref of descRefs(sd)) {
+        if (ref === name || !descNames.includes(ref)) continue;
         const propName = compactIRI(sd.property) || sk;
         const card = fmtCard(sd.min, sd.max);
-        const key = `${name}->${sd.description}`;
+        const key = `${name}->${ref}`;
         if (edgeMap.has(key)) {
           edgeMap.get(key).labels.push(`${propName}  [${card}]`);
         } else {
-          const entry = { from: name, to: sd.description, labels: [`${propName}  [${card}]`] };
+          const entry = { from: name, to: ref, labels: [`${propName}  [${card}]`] };
           edgeMap.set(key, entry);
           edges.push(entry);
         }
@@ -259,7 +263,7 @@ Application profile package generated with [YAMA](https://www.yamaml.org).
 
 ## Generated
 
-${date} with YAMA v1.0.1
+${date} with YAMA v${VERSION}
 `;
 }
 
@@ -431,9 +435,17 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
     Deno.writeTextFileSync(join(outputDir, "README.md"), readme);
   });
 
-  // Summary
+  // Summary — a partial package is a failure: report which artifacts
+  // broke and exit non-zero so CI can detect it.
   console.error(`\nPackage complete: ${succeeded} artifacts generated`);
   if (failed > 0) {
-    console.error(`  ${failed} artifact(s) had warnings (see above)`);
+    const failedNames = results
+      .filter((r) => !r.ok)
+      .map((r) => r.name)
+      .join(", ");
+    console.error(`  ${failed} artifact(s) failed: ${failedNames}`);
+    throw new Error(
+      `package incomplete — ${failed} of ${succeeded + failed} artifacts failed`,
+    );
   }
 }
