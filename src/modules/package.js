@@ -28,10 +28,11 @@
 
 import { join } from "@std/path";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
-import { descRefs, readInput } from "./io.js";
+import { readInput, statusLog } from "./io.js";
 import { readSimpleDsp, simpleDspToYama } from "./dsp.js";
 import { readTabular, rowsToYama } from "./dctap.js";
 import { generateHtmlReport, generateMarkdownReport } from "./report.js";
+import { buildOverviewSvg } from "./diagram.js";
 import { VERSION } from "../version.js";
 
 // ---------------------------------------------------------------------------
@@ -42,12 +43,16 @@ import { VERSION } from "../version.js";
  * Parses an input file into a YAMA document, handling YAML, SimpleDSP,
  * and DCTAP input formats.
  *
+ * The returned `flavor` labels the source format for report headers:
+ * "dctap", "simpledsp", or "yamaml" (plain YAMAML YAML input must not
+ * be labelled SimpleDSP).
+ *
  * @param {string} inputFile - Path to the input file.
  * @param {Object} [opts]
  * @param {string} [opts.inputFormat] - Force input format: "yaml", "simpledsp", "dctap".
- * @returns {Promise<Object>} Parsed YAMA document.
+ * @returns {Promise<{doc: Object, flavor: string}>} Parsed YAMA document and source flavor.
  */
-async function parseInputFile(inputFile, { inputFormat } = {}) {
+export async function parseInputFile(inputFile, { inputFormat } = {}) {
   const ext = inputFile.split(".").pop()?.toLowerCase();
 
   if (inputFormat === "dctap" || (!inputFormat && ext === "csv")) {
@@ -64,10 +69,10 @@ async function parseInputFile(inputFile, { inputFormat } = {}) {
     }
     if (isDctap) {
       const rows = await readTabular(inputFile);
-      return rowsToYama(rows);
+      return { doc: rowsToYama(rows), flavor: "dctap" };
     }
     const { blocks, namespaces } = await readSimpleDsp(inputFile);
-    return simpleDspToYama(blocks, namespaces);
+    return { doc: simpleDspToYama(blocks, namespaces), flavor: "simpledsp" };
   }
 
   if (
@@ -77,152 +82,12 @@ async function parseInputFile(inputFile, { inputFormat } = {}) {
     ext === "xls"
   ) {
     const { blocks, namespaces } = await readSimpleDsp(inputFile);
-    return simpleDspToYama(blocks, namespaces);
+    return { doc: simpleDspToYama(blocks, namespaces), flavor: "simpledsp" };
   }
 
   // Default: YAML
   const text = await readInput(inputFile);
-  return parseYaml(text);
-}
-
-// ---------------------------------------------------------------------------
-// SVG diagram builder (inline overview, same as report command)
-// ---------------------------------------------------------------------------
-
-/**
- * Generates an overview SVG diagram string from a YAMA document.
- *
- * Uses the Graphviz WASM engine. Returns an empty string if diagram
- * generation fails (e.g., no Graphviz available).
- *
- * @param {Object} doc - Parsed YAMA document.
- * @returns {Promise<string>} SVG string, or empty string on failure.
- */
-async function buildOverviewSvg(doc) {
-  const ns = doc.namespaces || {};
-  const descriptions = doc.descriptions || {};
-  const descNames = Object.keys(descriptions);
-
-  function dotEsc(s) {
-    return String(s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  }
-  function esc(s) {
-    return String(s || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-  function compactIRI(iri) {
-    if (!iri) return "";
-    const colon = iri.indexOf(":");
-    if (colon > 0 && !iri.startsWith("http") && !iri.startsWith("urn:")) {
-      const prefix = iri.slice(0, colon);
-      if (prefix in ns) return iri;
-    }
-    for (const [prefix, nsUri] of Object.entries(ns)) {
-      if (iri.startsWith(nsUri)) return `${prefix}:${iri.slice(nsUri.length)}`;
-    }
-    return iri;
-  }
-  function fmtCard(min, max) {
-    const lo = min != null ? String(min) : "0";
-    const hi = max != null ? String(max) : "*";
-    return lo === hi ? lo : `${lo}..${hi}`;
-  }
-
-  const headerColors = [
-    "#FFCE9F", "#B8D4E3", "#C8E6C9", "#F8CECC",
-    "#D1C4E9", "#FFE0B2", "#B2DFDB", "#F0F4C3",
-  ];
-
-  const dotLines = [];
-  dotLines.push("digraph YAMA {");
-  dotLines.push('  bgcolor="#ffffff";');
-  dotLines.push("  rankdir=LR;");
-  dotLines.push('  pad="0.6";');
-  dotLines.push("  nodesep=0.8;");
-  dotLines.push("  ranksep=1.5;");
-  dotLines.push("  splines=curved;");
-  dotLines.push('  fontname="Helvetica";');
-  dotLines.push('  node [shape=plaintext fontname="Helvetica"];');
-  dotLines.push('  edge [fontname="Helvetica" fontsize=10 color="#555555" penwidth=1.5 arrowsize=0.9];');
-  dotLines.push("");
-
-  const edges = [];
-  const edgeMap = new Map();
-
-  // Collect self-refs — description may be a scalar or a list
-  // (multi-shape disjunction), so refs go through descRefs().
-  const selfRefs = {};
-  for (const name of descNames) {
-    selfRefs[name] = [];
-    const stmts = descriptions[name].statements || {};
-    for (const [sk, sd] of Object.entries(stmts)) {
-      if (descRefs(sd).includes(name)) {
-        const propName = compactIRI(sd.property) || sk;
-        selfRefs[name].push({ prop: propName, card: fmtCard(sd.min, sd.max) });
-      }
-    }
-  }
-
-  for (let di = 0; di < descNames.length; di++) {
-    const name = descNames[di];
-    const def = descriptions[name];
-    const bg = headerColors[di % headerColors.length];
-    const displayName = def.label || name;
-    const rdfClass = def.a ? compactIRI(def.a) : "";
-    const refs = selfRefs[name];
-
-    let label = "<\n";
-    label += `    <TABLE BORDER="2" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" COLOR="#666666" BGCOLOR="${bg}">\n`;
-    label += `      <TR><TD CELLPADDING="10" ALIGN="CENTER">`;
-    label += `<FONT POINT-SIZE="13"><B>${esc(displayName)}</B></FONT>`;
-    if (rdfClass) {
-      label += `<BR/><FONT POINT-SIZE="11" COLOR="#666666">${esc(rdfClass)}</FONT>`;
-    }
-    if (refs.length > 0) {
-      for (const ref of refs) {
-        label += `<BR/><FONT POINT-SIZE="9" COLOR="#6A1B9A"><I>&#x21BA; ${esc(ref.prop)}  [${esc(ref.card)}]</I></FONT>`;
-      }
-    }
-    label += `</TD></TR>\n`;
-    label += `    </TABLE>\n  >`;
-    dotLines.push(`  "${dotEsc(name)}" [label=${label}];`);
-    dotLines.push("");
-
-    const stmts = def.statements || {};
-    for (const [sk, sd] of Object.entries(stmts)) {
-      // Multi-shape statements draw one edge per referenced shape.
-      for (const ref of descRefs(sd)) {
-        if (ref === name || !descNames.includes(ref)) continue;
-        const propName = compactIRI(sd.property) || sk;
-        const card = fmtCard(sd.min, sd.max);
-        const key = `${name}->${ref}`;
-        if (edgeMap.has(key)) {
-          edgeMap.get(key).labels.push(`${propName}  [${card}]`);
-        } else {
-          const entry = { from: name, to: ref, labels: [`${propName}  [${card}]`] };
-          edgeMap.set(key, entry);
-          edges.push(entry);
-        }
-      }
-    }
-  }
-
-  dotLines.push("");
-  for (const edge of edges) {
-    const labelRows = edge.labels
-      .map((l) => `<TR><TD BGCOLOR="#ffffff"><FONT FACE="Helvetica" POINT-SIZE="10" COLOR="#333333">${esc(l)}</FONT></TD></TR>`)
-      .join("");
-    const labelHtml = `<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">${labelRows}</TABLE>`;
-    dotLines.push(`  "${dotEsc(edge.from)}" -> "${dotEsc(edge.to)}" [label=<${labelHtml}>];`);
-  }
-  dotLines.push("}");
-
-  const { Graphviz } = await import("@hpcc-js/wasm-graphviz");
-  const graphviz = await Graphviz.load();
-  return graphviz.dot(dotLines.join("\n"), "svg");
+  return { doc: parseYaml(text), flavor: "yamaml" };
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +150,7 @@ ${date} with YAMA v${VERSION}
  */
 export async function generatePackage(inputFile, outputDir, opts = {}) {
   // 1. Parse input into YAMA doc
-  const doc = await parseInputFile(inputFile, opts);
+  const { doc, flavor } = await parseInputFile(inputFile, opts);
   if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
     throw new Error(`${inputFile}: not a valid profile document`);
   }
@@ -314,7 +179,7 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
     }
   }
 
-  console.error(`Generating package in ${outputDir}/`);
+  statusLog(`Generating package in ${outputDir}/`);
 
   // -- profile.yaml (canonical YAMA source) --------------------------------
   await generate("profile.yaml", () => {
@@ -413,7 +278,7 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
 
   // -- profile.md (Markdown report) ---------------------------------------
   await generate("profile.md", () => {
-    const md = generateMarkdownReport(doc, inputFile);
+    const md = generateMarkdownReport(doc, inputFile, flavor);
     Deno.writeTextFileSync(join(outputDir, "profile.md"), md);
   });
 
@@ -425,7 +290,7 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
     } catch {
       // Diagram is optional for HTML report
     }
-    const html = generateHtmlReport(doc, svgDiagram, inputFile);
+    const html = generateHtmlReport(doc, svgDiagram, inputFile, flavor);
     Deno.writeTextFileSync(join(outputDir, "index.html"), html);
   });
 
@@ -437,7 +302,7 @@ export async function generatePackage(inputFile, outputDir, opts = {}) {
 
   // Summary — a partial package is a failure: report which artifacts
   // broke and exit non-zero so CI can detect it.
-  console.error(`\nPackage complete: ${succeeded} artifacts generated`);
+  statusLog(`\nPackage complete: ${succeeded} artifacts generated`);
   if (failed > 0) {
     const failedNames = results
       .filter((r) => !r.ok)

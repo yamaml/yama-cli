@@ -9,7 +9,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { readInput } from "./io.js";
+import { readInput, statusLog } from "./io.js";
 
 /**
  * Converts a YAMA/YAMAML file to JSON.
@@ -24,7 +24,7 @@ export async function generateJSON(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, json);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(json);
   }

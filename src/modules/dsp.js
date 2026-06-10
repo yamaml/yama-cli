@@ -60,6 +60,7 @@ import {
   descRefs,
   readInput,
   readInputBytes,
+  statusLog,
   writeStdoutSync,
 } from "./io.js";
 import {
@@ -822,7 +823,7 @@ function writeSimpleDspTabular(simpleDspText, output) {
     XLSX.utils.book_append_sheet(workbook, sheet, "Sheet 1");
     const buf = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
     Deno.writeFileSync(output, new Uint8Array(buf));
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
     return;
   }
 
@@ -848,7 +849,7 @@ function writeSimpleDspTabular(simpleDspText, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, text);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     writeStdoutSync(new TextEncoder().encode(text));
   }
@@ -1234,7 +1235,7 @@ export async function importSimpleDSP(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, yaml);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(yaml);
   }

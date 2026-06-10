@@ -49,7 +49,7 @@
 import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
 import * as XLSX from "xlsx";
-import { readInput, readInputBytes, writeStdoutSync } from "./io.js";
+import { readInput, readInputBytes, statusLog, writeStdoutSync } from "./io.js";
 import { normalizeScheme } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ function writeTabular(rows, output) {
     XLSX.utils.book_append_sheet(workbook, worksheet, "DCTAP");
     const buf = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
     Deno.writeFileSync(output, new Uint8Array(buf));
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
     return;
   }
 
@@ -159,7 +159,7 @@ function writeTabular(rows, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, result);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     writeStdoutSync(new TextEncoder().encode(result));
   }
@@ -739,7 +739,7 @@ export async function importDCTAP(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, yaml);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(yaml);
   }

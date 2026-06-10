@@ -20,7 +20,7 @@ import { parse as parseYaml } from "@std/yaml";
 import { Graphviz } from "@hpcc-js/wasm-graphviz";
 import { extname } from "@std/path";
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
-import { datatypes, descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput, statusLog, writeStdoutSync } from "./io.js";
 
 // ── Color palette ─────────────────────────────────────────────────
 
@@ -66,6 +66,9 @@ const BW = {
   edgeLabelText: "#000000",
   graphBg: "#ffffff",
 };
+
+/** Valid `-f` style names for the diagram command. */
+export const DIAGRAM_STYLES = ["color", "bw", "overview", "overview-bw"];
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -352,6 +355,26 @@ function buildOverviewDot(doc, { mode = "color" } = {}) {
 // ── Public API ────────────────────────────────────────────────────
 
 /**
+ * Renders the overview diagram for a parsed YAMA document as an SVG
+ * string.
+ *
+ * Shared by the `report` and `package` commands, which embed the
+ * overview diagram in generated HTML. Multi-shape `description`
+ * references (scalar or list) are handled by {@link buildOverviewDot}
+ * via `descRefs`, so every referenced shape draws an edge.
+ *
+ * @param {Object} doc - Parsed YAMA document.
+ * @param {Object} [opts]
+ * @param {string} [opts.mode="color"] - "color" or "bw" palette.
+ * @returns {Promise<string>} SVG markup.
+ */
+export async function buildOverviewSvg(doc, { mode = "color" } = {}) {
+  const dot = buildOverviewDot(doc, { mode });
+  const graphviz = await Graphviz.load();
+  return graphviz.dot(dot, "svg");
+}
+
+/**
  * Generate a diagram from a YAMA file.
  *
  * Output format is determined by file extension:
@@ -377,6 +400,11 @@ export async function generateDiagram(file, { output, format } = {}) {
     throw new Error(`${file}: not a valid YAMA document`);
   }
   const fmt = (format || "color").toLowerCase();
+  if (!DIAGRAM_STYLES.includes(fmt)) {
+    throw new Error(
+      `unknown diagram style "${format}". Valid styles: ${DIAGRAM_STYLES.join(", ")}`,
+    );
+  }
   const isOverview = fmt === "overview" || fmt === "overview-bw";
   const mode = (fmt === "bw" || fmt === "overview-bw") ? "bw" : "color";
   const dot = isOverview
@@ -388,9 +416,9 @@ export async function generateDiagram(file, { output, format } = {}) {
   if (ext === ".dot" || ext === ".gv") {
     if (output) {
       await Deno.writeTextFile(output, dot);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(new TextEncoder().encode(dot));
+      writeStdoutSync(new TextEncoder().encode(dot));
     }
     return;
   }
@@ -403,9 +431,9 @@ export async function generateDiagram(file, { output, format } = {}) {
     const png = await svgToPng(svg);
     if (output) {
       await Deno.writeFile(output, png);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(png);
+      writeStdoutSync(png);
     }
     return;
   }
@@ -419,9 +447,9 @@ export async function generateDiagram(file, { output, format } = {}) {
     const pdf = await svgToPdf(svg);
     if (output) {
       await Deno.writeFile(output, pdf);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(pdf);
+      writeStdoutSync(pdf);
     }
     return;
   }
@@ -438,9 +466,9 @@ export async function generateDiagram(file, { output, format } = {}) {
 
   if (output) {
     await Deno.writeTextFile(output, result);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
-    Deno.stdout.writeSync(new TextEncoder().encode(result));
+    writeStdoutSync(new TextEncoder().encode(result));
   }
 }
 
@@ -472,9 +500,9 @@ export async function renderDot(file, { output } = {}) {
     const png = await svgToPng(svg);
     if (output) {
       await Deno.writeFile(output, png);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(png);
+      writeStdoutSync(png);
     }
     return;
   }
@@ -485,9 +513,9 @@ export async function renderDot(file, { output } = {}) {
     const pdf = await svgToPdf(svg);
     if (output) {
       await Deno.writeFile(output, pdf);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
-      Deno.stdout.writeSync(pdf);
+      writeStdoutSync(pdf);
     }
     return;
   }
@@ -506,9 +534,9 @@ export async function renderDot(file, { output } = {}) {
 
   if (output) {
     await Deno.writeTextFile(output, result);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
-    Deno.stdout.writeSync(new TextEncoder().encode(result));
+    writeStdoutSync(new TextEncoder().encode(result));
   }
 }
 

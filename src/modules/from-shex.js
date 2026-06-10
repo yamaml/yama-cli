@@ -45,7 +45,7 @@
  */
 
 import { stringify as stringifyYaml } from "@std/yaml";
-import { readInput } from "./io.js";
+import { readInput, statusLog } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // Prefix / BASE parsing
@@ -468,7 +468,7 @@ export async function importShEx(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, yaml);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(yaml);
   }

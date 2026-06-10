@@ -9,7 +9,7 @@
  */
 
 import N3 from "n3";
-import { writeStdoutSync } from "./io.js";
+import { statusLog, writeStdoutSync } from "./io.js";
 
 /**
  * @typedef {Quad} Quad
@@ -140,7 +140,7 @@ export function serializeRdf(quads, namespaces, base, output, format) {
     const result = quadsToJsonLd(quads, namespaces, base);
     if (output) {
       Deno.writeTextFileSync(output, result);
-      console.error(`Written to ${output}`);
+      statusLog(`Written to ${output}`);
     } else {
       writeStdoutSync(new TextEncoder().encode(result));
     }
@@ -168,7 +168,7 @@ export function serializeRdf(quads, namespaces, base, output, format) {
       try {
         if (output) {
           Deno.writeTextFileSync(output, result);
-          console.error(`Written to ${output}`);
+          statusLog(`Written to ${output}`);
         } else {
           writeStdoutSync(new TextEncoder().encode(result));
         }

@@ -38,7 +38,7 @@
 
 import { stringify as stringifyYaml } from "@std/yaml";
 import N3 from "n3";
-import { readInput } from "./io.js";
+import { readInput, statusLog } from "./io.js";
 
 /**
  * @typedef {Quad} Quad
@@ -478,7 +478,7 @@ export async function importSHACL(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, yaml);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(yaml);
   }

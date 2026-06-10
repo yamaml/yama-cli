@@ -8,6 +8,7 @@
  */
 
 import { stringify as yamlStringify } from "@std/yaml";
+import { statusLog } from "./io.js";
 
 /**
  * Well-known namespace prefix → URI mappings.
@@ -95,7 +96,7 @@ export async function scaffoldProject(opts = {}) {
 
   if (opts.output) {
     await Deno.writeTextFile(opts.output, yaml);
-    console.error(`Created ${opts.output}`);
+    statusLog(`Created ${opts.output}`);
   } else {
     console.log(yaml);
   }

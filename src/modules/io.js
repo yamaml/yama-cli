@@ -9,6 +9,36 @@
  * @module io
  */
 
+// ── Quiet mode ──
+
+let quietMode = false;
+
+/**
+ * Enables or disables quiet mode for status messages.
+ *
+ * Wired to the CLI's `-q/--quiet` flag. Only affects
+ * {@link statusLog}; warnings and errors keep printing.
+ *
+ * @param {boolean} value
+ * @returns {void}
+ */
+export function setQuiet(value) {
+  quietMode = Boolean(value);
+}
+
+/**
+ * Prints a status message to stderr unless quiet mode is on.
+ *
+ * Used for non-error chatter like "Written to out.ttl" so that
+ * `-q/--quiet` can suppress it without touching warnings/errors.
+ *
+ * @param {...*} args - Arguments forwarded to console.error.
+ * @returns {void}
+ */
+export function statusLog(...args) {
+  if (!quietMode) console.error(...args);
+}
+
 /**
  * Reads text content from a local file or URL.
  *

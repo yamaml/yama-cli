@@ -47,8 +47,8 @@ import { generatePackage } from "./modules/package.js";
 import { importSHACL } from "./modules/from-shacl.js";
 import { importShEx } from "./modules/from-shex.js";
 import { generateVocab } from "./modules/vocab.js";
-
-const VERSION = "1.0.1";
+import { setQuiet, statusLog } from "./modules/io.js";
+import { VERSION } from "./version.js";
 
 // ---------------------------------------------------------------------------
 // Argument parsing — short flags with long aliases
@@ -68,6 +68,8 @@ const args = parseArgs(Deno.args, {
     q: "quiet",
   },
 });
+
+setQuiet(args.quiet || args.q);
 
 // ---------------------------------------------------------------------------
 // Per-subcommand help text
@@ -429,60 +431,18 @@ switch (cmd) {
   case "report":
     requireInput();
     await run(async () => {
-      const { parse: parseYaml } = await import("@std/yaml");
-      const { readInput } = await import("./modules/io.js");
-      const { readSimpleDsp, simpleDspToYama } = await import("./modules/dsp.js");
-      const { readTabular, rowsToYama } = await import("./modules/dctap.js");
-      const { Graphviz } = await import("@hpcc-js/wasm-graphviz");
+      const { parseInputFile } = await import("./modules/package.js");
+      const { buildOverviewSvg } = await import("./modules/diagram.js");
 
-      // Detect input format
-      const ext = args.i.split(".").pop()?.toLowerCase();
-      const inputFormat = args["input-format"] || null;
-      let doc;
-      let isDctap = false;
-
-      if (inputFormat === "dctap" || (!inputFormat && ext === "csv")) {
-        // Check if it's actually SimpleDSP CSV
-        isDctap = inputFormat === "dctap";
-        if (!inputFormat && ext === "csv") {
-          const text = await readInput(args.i);
-          const firstLine = text.split("\n").find((l) => l.trim() && !l.trim().startsWith("#"));
-          if (firstLine?.trim().startsWith("[")) {
-            isDctap = false;
-          } else {
-            const lower = firstLine?.toLowerCase() || "";
-            isDctap = lower.includes("propertyid") || lower.includes("shapeid");
-          }
-        }
-        if (isDctap) {
-          const rows = await readTabular(args.i);
-          doc = rowsToYama(rows);
-        } else {
-          const { blocks, namespaces } = await readSimpleDsp(args.i);
-          doc = simpleDspToYama(blocks, namespaces);
-        }
-      } else if (
-        inputFormat === "simpledsp" ||
-        ext === "tsv" ||
-        ext === "xlsx" ||
-        ext === "xls"
-      ) {
-        const { blocks, namespaces } = await readSimpleDsp(args.i);
-        doc = simpleDspToYama(blocks, namespaces);
-      } else {
-        // Default: YAML
-        const text = await readInput(args.i);
-        doc = parseYaml(text);
-      }
+      // Parse input and detect its flavor ("yamaml", "simpledsp", or
+      // "dctap") — plain YAMAML input must not be labelled SimpleDSP.
+      const { doc, flavor } = await parseInputFile(args.i, {
+        inputFormat: args["input-format"],
+      });
 
       if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
         throw new Error(`${args.i}: not a valid profile document`);
       }
-
-      // Determine flavor from detected input format
-      const flavor = (inputFormat === "dctap" || (!inputFormat && isDctap))
-        ? "dctap"
-        : "simpledsp";
 
       // Determine output format from extension
       const outExt = args.o ? args.o.split(".").pop()?.toLowerCase() : "html";
@@ -492,143 +452,20 @@ switch (cmd) {
       if (isMd) {
         result = generateMarkdownReport(doc, args.i, flavor);
       } else {
-        // Generate SVG diagram for HTML
-        // Use the internal buildDot approach from diagram.js
-        const ns = doc.namespaces || {};
-        const descriptions = doc.descriptions || {};
-        const descNames = Object.keys(descriptions);
-
-        // Build a minimal DOT for the overview diagram
-        // Re-implement inline to avoid exporting internals from diagram.js
+        // Overview SVG for the HTML report — shared builder from
+        // diagram.js (handles multi-shape description refs).
         let svgDiagram = "";
         try {
-          // Dynamically build DOT source (simplified overview)
-          const dotLines = [];
-          dotLines.push("digraph YAMA {");
-          dotLines.push('  bgcolor="#ffffff";');
-          dotLines.push("  rankdir=LR;");
-          dotLines.push('  pad="0.6";');
-          dotLines.push("  nodesep=0.8;");
-          dotLines.push("  ranksep=1.5;");
-          dotLines.push("  splines=curved;");
-          dotLines.push('  fontname="Helvetica";');
-          dotLines.push('  node [shape=plaintext fontname="Helvetica"];');
-          dotLines.push('  edge [fontname="Helvetica" fontsize=10 color="#555555" penwidth=1.5 arrowsize=0.9];');
-          dotLines.push("");
-
-          const headerColors = [
-            "#FFCE9F", "#B8D4E3", "#C8E6C9", "#F8CECC",
-            "#D1C4E9", "#FFE0B2", "#B2DFDB", "#F0F4C3",
-          ];
-          const edges = [];
-          const edgeMap = new Map();
-
-          function dotEsc(s) {
-            return String(s || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-          }
-          function esc(s) {
-            return String(s || "")
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/"/g, "&quot;");
-          }
-          function compactIRI(iri) {
-            if (!iri) return "";
-            const colon = iri.indexOf(":");
-            if (colon > 0 && !iri.startsWith("http") && !iri.startsWith("urn:")) {
-              const prefix = iri.slice(0, colon);
-              if (prefix in ns) return iri;
-            }
-            for (const [prefix, nsUri] of Object.entries(ns)) {
-              if (iri.startsWith(nsUri)) return `${prefix}:${iri.slice(nsUri.length)}`;
-            }
-            return iri;
-          }
-          function fmtCard(min, max) {
-            const lo = min != null ? String(min) : "0";
-            const hi = max != null ? String(max) : "*";
-            return lo === hi ? lo : `${lo}..${hi}`;
-          }
-
-          // Collect self-refs
-          const selfRefs = {};
-          for (const name of descNames) {
-            selfRefs[name] = [];
-            const stmts = descriptions[name].statements || {};
-            for (const [sk, sd] of Object.entries(stmts)) {
-              if (sd.description === name) {
-                const propName = compactIRI(sd.property) || sk;
-                selfRefs[name].push({ prop: propName, card: fmtCard(sd.min, sd.max) });
-              }
-            }
-          }
-
-          for (let di = 0; di < descNames.length; di++) {
-            const name = descNames[di];
-            const def = descriptions[name];
-            const bg = headerColors[di % headerColors.length];
-            const displayName = def.label || name;
-            const rdfClass = def.a ? compactIRI(def.a) : "";
-            const refs = selfRefs[name];
-
-            let label = "<\n";
-            label += `    <TABLE BORDER="2" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" COLOR="#666666" BGCOLOR="${bg}">\n`;
-            label += `      <TR><TD CELLPADDING="10" ALIGN="CENTER">`;
-            label += `<FONT POINT-SIZE="13"><B>${esc(displayName)}</B></FONT>`;
-            if (rdfClass) {
-              label += `<BR/><FONT POINT-SIZE="11" COLOR="#666666">${esc(rdfClass)}</FONT>`;
-            }
-            if (refs.length > 0) {
-              for (const ref of refs) {
-                label += `<BR/><FONT POINT-SIZE="9" COLOR="#6A1B9A"><I>&#x21BA; ${esc(ref.prop)}  [${esc(ref.card)}]</I></FONT>`;
-              }
-            }
-            label += `</TD></TR>\n`;
-            label += `    </TABLE>\n  >`;
-            dotLines.push(`  "${dotEsc(name)}" [label=${label}];`);
-            dotLines.push("");
-
-            const stmts = def.statements || {};
-            for (const [sk, sd] of Object.entries(stmts)) {
-              if (sd.description && sd.description !== name && descNames.includes(sd.description)) {
-                const propName = compactIRI(sd.property) || sk;
-                const card = fmtCard(sd.min, sd.max);
-                const key = `${name}->${sd.description}`;
-                if (edgeMap.has(key)) {
-                  edgeMap.get(key).labels.push(`${propName}  [${card}]`);
-                } else {
-                  const entry = { from: name, to: sd.description, labels: [`${propName}  [${card}]`] };
-                  edgeMap.set(key, entry);
-                  edges.push(entry);
-                }
-              }
-            }
-          }
-
-          dotLines.push("");
-          for (const edge of edges) {
-            const labelRows = edge.labels
-              .map((l) => `<TR><TD BGCOLOR="#ffffff"><FONT FACE="Helvetica" POINT-SIZE="10" COLOR="#333333">${esc(l)}</FONT></TD></TR>`)
-              .join("");
-            const labelHtml = `<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">${labelRows}</TABLE>`;
-            dotLines.push(`  "${dotEsc(edge.from)}" -> "${dotEsc(edge.to)}" [label=<${labelHtml}>];`);
-          }
-          dotLines.push("}");
-
-          const graphviz = await Graphviz.load();
-          svgDiagram = graphviz.dot(dotLines.join("\n"), "svg");
+          svgDiagram = await buildOverviewSvg(doc);
         } catch {
           // Diagram generation is optional — continue without it
-          svgDiagram = "";
         }
-
         result = generateHtmlReport(doc, svgDiagram, args.i, flavor);
       }
 
       if (args.o) {
         await Deno.writeTextFile(args.o, result);
-        console.error(`Report written to ${args.o}`);
+        statusLog(`Report written to ${args.o}`);
       } else {
         console.log(result);
       }
@@ -651,6 +488,12 @@ switch (cmd) {
 
   case "validate":
     requireInput();
+    if (args.format && !["human", "json"].includes(args.format)) {
+      console.error(
+        `Error: unknown --format "${args.format}". Valid values: human, json`,
+      );
+      Deno.exit(1);
+    }
     await run(async () => {
       const report = await validateFile(args.i, {
         inputFormat: args["input-format"],
@@ -660,7 +503,7 @@ switch (cmd) {
         : formatHuman(report);
       if (args.o) {
         Deno.writeTextFileSync(args.o, output);
-        console.error(`Report written to ${args.o}`);
+        statusLog(`Report written to ${args.o}`);
       } else {
         console.log(output);
       }
@@ -724,7 +567,7 @@ Options:
   -i, --input    Input YAMA file or URL (required)
   -o, --output   Output file path (optional; stdout if omitted)
                  diagram: output format is determined by extension
-                          (.svg, .png, .dot, .gv, .ps, .eps, .json)
+                          (.svg, .pdf, .png, .dot, .gv, .ps, .eps, .json)
   -f             Output format:
                  rdf/shacl/dsp: ${SUPPORTED_FORMATS.join(", ")}
                  diagram: color (default), bw, overview, overview-bw

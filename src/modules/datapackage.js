@@ -33,7 +33,7 @@
 
 import { parse as parseYaml } from "@std/yaml";
 import { basename } from "@std/path";
-import { datatypes, readInput } from "./io.js";
+import { datatypes, readInput, statusLog } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // XSD-to-Frictionless type mapping
@@ -407,7 +407,7 @@ export async function generateDataPackage(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, json);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(json);
   }

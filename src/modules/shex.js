@@ -32,7 +32,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { datatypes, descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, readInput, statusLog } from "./io.js";
 import { normalizeScheme, STANDARD_PREFIXES } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ export async function generateShEx(file, output) {
 
   if (output) {
     Deno.writeTextFileSync(output, shex);
-    console.error(`Written to ${output}`);
+    statusLog(`Written to ${output}`);
   } else {
     console.log(shex);
   }
