@@ -2,12 +2,13 @@
  * @fileoverview Profile documentation generator for YAMA.
  *
  * Produces standalone single-page HTML or Markdown reports documenting
- * a YAMA application profile. HTML uses Pico CSS (classless) for
- * styling via CDN link, requiring no build step.
+ * a YAMA application profile. HTML embeds a compact hand-rolled
+ * stylesheet inline, so the output renders identically offline with
+ * no CDN or font fetches.
  *
- * Both generators accept an optional `flavor` parameter ("simpledsp"
- * or "dctap") that controls column headers, section titles, cardinality
- * display, and value-type terminology.
+ * Both generators accept an optional `flavor` parameter ("yamaml",
+ * "simpledsp", or "dctap") that controls column headers, section
+ * titles, cardinality display, and value-type terminology.
  *
  * Two exports:
  *   - `generateHtmlReport(doc, svgDiagram, filePath, flavor)` — HTML string
@@ -40,6 +41,13 @@ const STANDARD_PREFIXES = {
 // ---------------------------------------------------------------------------
 
 const FLAVOR_LABELS = {
+  yamaml: {
+    specName: "YAMAML",
+    descriptionPlural: "Descriptions",
+    descriptionSingular: "Description",
+    columns: ["Name", "Property", "Min", "Max", "Type", "Constraint", "Note"],
+    valueTypes: { literal: "literal", iri: "IRI", bnode: "bnode", structured: "structured" },
+  },
   simpledsp: {
     specName: "SimpleDSP",
     descriptionPlural: "Description Templates",
@@ -59,11 +67,14 @@ const FLAVOR_LABELS = {
 /**
  * Returns the flavor labels for a given flavor string.
  *
- * @param {string} [flavor] - "simpledsp" or "dctap".
+ * Plain YAMAML input is labelled "YAMAML" — falling back to SimpleDSP
+ * would mislabel sources that are neither SimpleDSP nor DCTAP.
+ *
+ * @param {string} [flavor] - "yamaml", "simpledsp", or "dctap".
  * @returns {Object} Flavor label object.
  */
 function getLabels(flavor) {
-  return FLAVOR_LABELS[flavor] || FLAVOR_LABELS.simpledsp;
+  return FLAVOR_LABELS[flavor] || FLAVOR_LABELS.yamaml;
 }
 
 /**
@@ -140,27 +151,12 @@ function escHtml(s) {
 }
 
 /**
- * Formats a cardinality pair as a human-readable string.
- *
- * @param {number|null|undefined} min
- * @param {number|null|undefined} max
- * @returns {string}
- */
-function formatCard(min, max) {
-  const lo = min != null ? String(min) : "0";
-  const hi = max != null ? String(max) : "*";
-  if (lo === hi) return lo;
-  return `${lo}..${hi}`;
-}
-
-/**
  * Resolves the display type for a statement.
  *
  * @param {Object} stmtDef - Statement definition.
- * @param {Object} namespaces - Document namespaces.
  * @returns {string}
  */
-function resolveType(stmtDef, namespaces) {
+function resolveType(stmtDef) {
   const dts = datatypes(stmtDef);
   if (dts.length > 0) return dts.join(" ");
   if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "IRI";
@@ -173,10 +169,9 @@ function resolveType(stmtDef, namespaces) {
  * Resolves the constraint display string for a statement.
  *
  * @param {Object} stmtDef
- * @param {Object} namespaces
  * @returns {string}
  */
-function resolveConstraint(stmtDef, namespaces) {
+function resolveConstraint(stmtDef) {
   const refs = descRefs(stmtDef);
   if (refs.length > 0) return refs.join(", ");
   if (stmtDef.a) {
@@ -207,6 +202,47 @@ function descSlug(name) {
 }
 
 /**
+ * Creates a GitHub-style Markdown anchor slug from heading text.
+ *
+ * Lowercases, strips punctuation (keeping letters, digits, spaces,
+ * hyphens, and underscores — CJK included), and turns spaces into
+ * hyphens, matching how GitHub derives heading anchors.
+ *
+ * @param {string} text - Rendered heading text.
+ * @returns {string}
+ */
+function mdAnchor(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+/**
+ * Builds a description-name → Markdown-anchor map.
+ *
+ * Anchors derive from the rendered heading (the description's label
+ * when present, otherwise its key) so internal links always match the
+ * headings GitHub generates. Duplicate headings get `-1`, `-2` …
+ * suffixes, mirroring GitHub's de-duplication.
+ *
+ * @param {Object} descriptions - The document's descriptions map.
+ * @returns {Object<string, string>} descName → anchor slug.
+ */
+function buildAnchorMap(descriptions) {
+  const counts = new Map();
+  const anchors = {};
+  for (const [name, def] of Object.entries(descriptions)) {
+    const slug = mdAnchor((def && def.label) || name);
+    const n = counts.get(slug) ?? 0;
+    counts.set(slug, n + 1);
+    anchors[name] = n === 0 ? slug : `${slug}-${n}`;
+  }
+  return anchors;
+}
+
+/**
  * Returns the current date as ISO date string (YYYY-MM-DD).
  *
  * @returns {string}
@@ -220,10 +256,62 @@ function today() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Self-contained stylesheet embedded in every HTML report.
+ *
+ * Keeps the report genuinely standalone — no CDN fetch, no external
+ * fonts — while staying close to the classless look the reports
+ * previously got from Pico CSS.
+ *
+ * @type {string}
+ */
+const INLINE_STYLESHEET = `
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; padding: 1rem 1.5rem 3rem; max-width: 70rem;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6; color: #24333e; background: #fff;
+    }
+    header { padding: 1.5rem 0 0.5rem; }
+    header p, footer p { color: #5d6b75; }
+    h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+    h2 {
+      font-size: 1.4rem; margin-top: 2.5rem;
+      border-bottom: 1px solid #e3e7ea; padding-bottom: 0.3rem;
+    }
+    a { color: #0172ad; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav ul { padding-left: 1.25rem; }
+    table {
+      border-collapse: collapse; width: 100%;
+      font-size: 0.9em; margin: 1rem 0;
+    }
+    th, td {
+      text-align: left; padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #e3e7ea; vertical-align: top;
+    }
+    thead th { border-bottom: 2px solid #c9d1d7; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+        "Liberation Mono", monospace;
+      font-size: 0.85em; background: #f3f5f7;
+      padding: 0.1em 0.3em; border-radius: 3px;
+    }
+    figure { margin: 1rem 0; overflow-x: auto; }
+    figure svg { max-width: 100%; height: auto; }
+    footer {
+      margin-top: 3rem; border-top: 1px solid #e3e7ea; font-size: 0.9em;
+    }
+`;
+
+/**
  * Generates a standalone HTML report for a YAMA application profile.
  *
- * Uses Pico CSS classless variant via CDN for zero-config styling.
- * The SVG diagram is embedded inline in a `<figure>` element.
+ * Styling is embedded inline (see {@link INLINE_STYLESHEET}) so the
+ * file renders identically offline — nothing is fetched at generation
+ * or viewing time. The SVG diagram is embedded inline in a `<figure>`
+ * element.
  *
  * @param {Object} doc - Parsed YAMA document.
  * @param {string} svgDiagram - SVG string for the overview diagram.
@@ -235,7 +323,6 @@ export function generateHtmlReport(doc, svgDiagram, filePath, flavor) {
   const labels = getLabels(flavor);
   const isDctap = flavor === "dctap";
   const namespaces = doc.namespaces || {};
-  const allNs = { ...STANDARD_PREFIXES, ...namespaces };
   const base = doc.base || "";
   const descriptions = doc.descriptions || {};
   const descNames = Object.keys(descriptions);
@@ -254,12 +341,7 @@ export function generateHtmlReport(doc, svgDiagram, filePath, flavor) {
   lines.push('  <meta charset="utf-8">');
   lines.push('  <meta name="viewport" content="width=device-width, initial-scale=1">');
   lines.push(`  <title>${escHtml(profileName)} — Application Profile (${labels.specName})</title>`);
-  lines.push('  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">');
-  lines.push("  <style>");
-  lines.push("    figure svg { max-width: 100%; height: auto; }");
-  lines.push("    table { font-size: 0.9em; }");
-  lines.push("    code { font-size: 0.85em; }");
-  lines.push("  </style>");
+  lines.push(`  <style>${INLINE_STYLESHEET}</style>`);
   lines.push("</head>");
   lines.push("<body>");
 
@@ -361,9 +443,9 @@ export function generateHtmlReport(doc, svgDiagram, filePath, flavor) {
         const stmtName = stmtDef.label || stmtKey;
         const property = stmtDef.property || "";
         const propertyIri = expandPrefixed(property, namespaces, base);
-        const rawType = resolveType(stmtDef, namespaces);
+        const rawType = resolveType(stmtDef);
         const type = rawType.includes(":") ? rawType : mapValueType(rawType, labels);
-        const constraint = resolveConstraint(stmtDef, namespaces);
+        const constraint = resolveConstraint(stmtDef);
         const note = stmtDef.note || "";
 
         // Property cell: linked to external URI
@@ -461,10 +543,12 @@ export function generateMarkdownReport(doc, filePath, flavor) {
   const labels = getLabels(flavor);
   const isDctap = flavor === "dctap";
   const namespaces = doc.namespaces || {};
-  const allNs = { ...STANDARD_PREFIXES, ...namespaces };
   const base = doc.base || "";
   const descriptions = doc.descriptions || {};
   const descNames = Object.keys(descriptions);
+  // Anchors derive from the rendered heading text (label when present),
+  // so internal links resolve in GitHub-flavored Markdown.
+  const anchors = buildAnchorMap(descriptions);
   const profileName = filePath
     ? filePath.split("/").pop().replace(/\.\w+$/, "")
     : "Profile";
@@ -504,7 +588,6 @@ export function generateMarkdownReport(doc, filePath, flavor) {
   for (const descName of descNames) {
     const descDef = descriptions[descName];
     const displayName = descDef.label || descName;
-    const slug = descSlug(descName);
     const statements = descDef.statements || {};
 
     lines.push(`## ${displayName}`);
@@ -538,9 +621,9 @@ export function generateMarkdownReport(doc, filePath, flavor) {
         const stmtName = stmtDef.label || stmtKey;
         const property = stmtDef.property || "";
         const propertyIri = expandPrefixed(property, namespaces, base);
-        const rawType = resolveType(stmtDef, namespaces);
+        const rawType = resolveType(stmtDef);
         const type = rawType.includes(":") ? rawType : mapValueType(rawType, labels);
-        const constraint = resolveConstraint(stmtDef, namespaces);
+        const constraint = resolveConstraint(stmtDef);
         const note = stmtDef.note || "";
 
         // Property: linked to external IRI
@@ -557,7 +640,7 @@ export function generateMarkdownReport(doc, filePath, flavor) {
           constraintMd = knownRefs.map((r) => {
             const refDef = descriptions[r];
             const refLabel = (refDef && refDef.label) || r;
-            return `[→ ${refLabel}](#${descSlug(r)})`;
+            return `[→ ${refLabel}](#${anchors[r]})`;
           }).join(", ");
         } else if (constraint) {
           constraintMd = `\`${constraint}\``;
