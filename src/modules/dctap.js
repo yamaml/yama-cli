@@ -598,10 +598,13 @@ const CANONICAL_BY_LOWER = new Map(
  * columns are dropped — `rowsToYama` only reads canonical fields, so
  * preserving variant spellings would just leave stale data behind.
  *
+ * Exported so validate.js matches headers exactly like the importer —
+ * a file must not be VALID via `from-dctap` and INVALID via `validate`.
+ *
  * @param {Record<string, string>} row
  * @returns {Record<string, string>}
  */
-function normaliseDctapRow(row) {
+export function normaliseDctapRow(row) {
   const out = {};
   for (const key of Object.keys(row)) {
     const canonical = CANONICAL_BY_LOWER.get(key.trim().toLowerCase());

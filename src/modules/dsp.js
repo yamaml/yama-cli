@@ -427,6 +427,11 @@ function parseSimpleDspText(text) {
  * Block markers are recognised even when padded with empty cells by
  * spreadsheet exports (e.g. `[MAIN],,,,`).
  *
+ * Each parsed row carries a `_line` (1-based input row ordinal) so
+ * the validator can report real locations. For TSV input this is the
+ * physical line number; for CSV/Excel it is the record/sheet row,
+ * which only diverges when quoted cells contain newlines.
+ *
  * @param {Array<Array<*>>} rows - Rows of raw cell values.
  * @returns {{blocks: Array<{id: string, rows: Object[]}>, namespaces: Object}}
  */
@@ -436,8 +441,8 @@ function parseSimpleDspRows(rows) {
   let currentBlock = null;
   let inNsBlock = false;
 
-  for (const rawCells of rows) {
-    const cells = rawCells.map((c) => String(c ?? ""));
+  for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+    const cells = rows[rowIdx].map((c) => String(c ?? ""));
     const first = (cells[0] || "").trim();
     const restEmpty = cells.slice(1).every((c) => c.trim() === "");
 
@@ -478,6 +483,7 @@ function parseSimpleDspRows(rows) {
         ValueType: (cells[4] || "").trim(),
         Constraint: (cells[5] || "").trim(),
         Comment: (cells[6] || "").trim(),
+        _line: rowIdx + 1,
       });
     }
   }

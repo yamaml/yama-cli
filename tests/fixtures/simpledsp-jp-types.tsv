@@ -1,0 +1,6 @@
+[MAIN]
+#Name	Property	Min	Max	ValueType	Constraint	Comment
+ID		1	1	ID		
+Title	dcterms:title	1	1	文字列		
+Subject	dcterms:subject	0	-	参照値(URI)	ndlsh:	
+Broken	dcterms:type	0	1	nonsense		
