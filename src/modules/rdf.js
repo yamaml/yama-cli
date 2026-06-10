@@ -19,6 +19,11 @@ import N3 from "n3";
 import * as XLSX from "xlsx";
 import { serializeRdf, SUPPORTED_FORMATS } from "./serialize.js";
 import { datatypes, readInput, readInputBytes } from "./io.js";
+import {
+  collectUsedStandardPrefixes,
+  expandPrefixed,
+  STANDARD_PREFIXES,
+} from "./prefixes.js";
 
 export { SUPPORTED_FORMATS };
 
@@ -34,9 +39,6 @@ const { namedNode, literal, blankNode, quad } = DataFactory;
 
 /** Full IRI for rdf:type. */
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-
-/** Full IRI for xsd:string. */
-const XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -55,17 +57,24 @@ export async function generateRDF(file, { output = "", format = "turtle" } = {})
   const doc = parseYaml(await readInput(file));
   const basePath = /^https?:\/\//i.test(file) ? file.replace(/\/[^/]*$/, "") : dirname(resolve(file));
 
+  // CURIEs resolve through the standard prefix table with user
+  // declarations taking precedence (YAMAML §2.2).
+  const userNamespaces = doc.namespaces || {};
   const ctx = {
     doc,
     basePath,
-    namespaces: doc.namespaces || {},
+    namespaces: { ...STANDARD_PREFIXES, ...userNamespaces },
     base: doc.base || "",
     defaults: doc.defaults || {},
     dataCache: new Map(),
   };
 
   const quads = await buildQuads(ctx);
-  await serializeRdf(quads, ctx.namespaces, ctx.base, output, format);
+  const outputNamespaces = {
+    ...userNamespaces,
+    ...collectUsedStandardPrefixes(quads, userNamespaces),
+  };
+  await serializeRdf(quads, outputNamespaces, ctx.base, output, format);
 }
 
 // ---------------------------------------------------------------------------
@@ -162,35 +171,6 @@ function inferTypeFromPath(filePath) {
 }
 
 // ---------------------------------------------------------------------------
-// Namespace / IRI helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Expands a prefixed term (e.g. `foaf:name`) to a full IRI.
- *
- * Returns the term unchanged if it is already a full IRI.
- * Falls back to the document base for unprefixed local names.
- *
- * @param {string} term
- * @param {Object} namespaces
- * @param {string} base
- * @returns {string|null} Full IRI, or null if `term` is falsy.
- */
-function expandPrefixed(term, namespaces, base) {
-  if (!term) return null;
-  if (/^(https?|urn):/.test(term)) return term;
-
-  const colon = term.indexOf(":");
-  if (colon >= 0) {
-    const prefix = term.substring(0, colon);
-    const local = term.substring(colon + 1);
-    if (namespaces[prefix]) return namespaces[prefix] + local;
-  }
-
-  return base ? base + term : term;
-}
-
-// ---------------------------------------------------------------------------
 // JSONata evaluation
 // ---------------------------------------------------------------------------
 
@@ -210,15 +190,21 @@ async function extractIds(data, idColumn) {
 /**
  * Extracts a field value from the record matching a given ID.
  *
+ * The ID comparison goes through `$string()` and a JSONata variable
+ * binding rather than string interpolation: numeric IDs (e.g. the
+ * spec's §2.4 inline `id: 1`) would never match a quoted literal
+ * under JSONata's type-strict `=`, and interpolated values could
+ * inject expression syntax via `"` or backticks.
+ *
  * @param {Object[]} data      - Loaded records.
  * @param {string}   idColumn  - Name of the ID field.
- * @param {string}   idValue   - ID to match.
+ * @param {string|number} idValue - ID to match.
  * @param {string}   fieldPath - Field to extract.
  * @returns {Promise<*>}
  */
 async function extractValue(data, idColumn, idValue, fieldPath) {
-  const expr = `$[(\`${idColumn}\` = "${idValue}")].\`${fieldPath}\``;
-  return await jsonata(expr).evaluate(data);
+  const expr = `$[$string(\`${idColumn}\`) = $idVal].\`${fieldPath}\``;
+  return await jsonata(expr).evaluate(data, { idVal: String(idValue) });
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +254,10 @@ function applyTransformations(value, mapping) {
  * Splits, transforms, and decorates a raw value into final output strings.
  *
  * Handles the full pipeline: separator splitting, strip/replace,
- * and prepend/append decoration.
+ * and prepend/append decoration. Array values from structured
+ * sources (JSON/YAML) produce one output value — and thus one
+ * triple — per element instead of collapsing into a single
+ * comma-joined literal.
  *
  * @param {*}      rawValue - Value extracted from the data source.
  * @param {Object} mapping  - Mapping configuration.
@@ -281,11 +270,16 @@ function transformValues(rawValue, mapping) {
   const pre = mapping.prepend || "";
   const suf = mapping.append || "";
 
-  let values;
-  if (sep && typeof rawValue === "string") {
-    values = rawValue.split(sep).map((v) => v.trim()).filter(Boolean);
-  } else {
-    values = [rawValue];
+  const rawList = Array.isArray(rawValue) ? rawValue : [rawValue];
+
+  const values = [];
+  for (const item of rawList) {
+    if (item === undefined || item === null || item === "") continue;
+    if (sep && typeof item === "string") {
+      values.push(...item.split(sep).map((v) => v.trim()).filter(Boolean));
+    } else {
+      values.push(item);
+    }
   }
 
   return values.map((v) => `${pre}${applyTransformations(v, mapping)}${suf}`);
@@ -299,9 +293,12 @@ function transformValues(rawValue, mapping) {
  * Creates an N3 RDF term (NamedNode or Literal) for a statement value.
  *
  * - IRI/URI types are expanded and wrapped as NamedNode.
- * - xsd:string literals get an `@en` language tag.
- * - Other typed literals use the declared datatype.
- * - Untyped literals default to plain strings (no language tag).
+ * - Literals with a declared datatype carry that datatype.
+ * - Untyped literals are plain strings.
+ *
+ * YAMAML has no language element, so no language tag is ever
+ * attached — tagging every literal `@en` would mislabel non-English
+ * data and silently discard declared `xsd:string` datatypes.
  *
  * @param {string} value
  * @param {string} type       - "literal", "IRI", or "URI".
@@ -319,12 +316,10 @@ function makeRdfObject(value, type, datatype, namespaces, base) {
 
   if (datatype) {
     const dtIri = expandPrefixed(datatype, namespaces, base);
-    if (dtIri === XSD_STRING) return literal(value, "en");
     return literal(value, namedNode(dtIri));
   }
 
-  // Default: plain string with @en tag
-  return literal(value, "en");
+  return literal(value);
 }
 
 // ---------------------------------------------------------------------------
