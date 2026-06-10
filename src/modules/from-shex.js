@@ -7,16 +7,18 @@
  *
  * ```shex
  * PREFIX prefix: <uri>
+ * PREFIX : <uri>
  * BASE <uri>
  *
- * <ShapeName> EXTRA a {
+ * <ShapeName> EXTRA a CLOSED {
  *   a [ClassName] ;
  *   prefix:property xsd:datatype {m,n} ;
  *   prefix:property @<OtherShape> * ;
  *   prefix:property IRI + ;
  *   prefix:property LITERAL ? ;
  *   prefix:property ["val1" "val2"] ;
- *   prefix:property xsd:decimal //pattern// MinInclusive 0 MaxInclusive 100 ;
+ *   prefix:property [ex:a ex:b] ;
+ *   prefix:property xsd:decimal /pattern/ MinInclusive 0 MaxInclusive 100 ;
  * }
  * ```
  *
@@ -25,6 +27,7 @@
  * | ShExC element                  | YAMA element              |
  * |--------------------------------|---------------------------|
  * | Shape name `<name>`            | description               |
+ * | `CLOSED` qualifier             | description.closed = true |
  * | `a [ClassName]`                | description.a             |
  * | Triple constraint predicate    | statement.property        |
  * | Datatype (e.g. `xsd:string`)  | statement.datatype        |
@@ -34,11 +37,18 @@
  * | `BNODE`                        | statement.type = BNODE    |
  * | Cardinality `*`, `+`, `?`, `{m,n}` | statement.min/max    |
  * | Value set `["a" "b"]`          | statement.values          |
- * | `//pattern//`                  | statement.pattern         |
+ * | Value set `[ex:a <iri>]`       | statement.values (IRIs)   |
+ * | Value set `[ex:~]` (IRI stem)  | statement.inScheme        |
+ * | Value set `[@en @ja]`          | statement.languageTag     |
+ * | `/pattern/` or legacy `//pattern//` | statement.pattern    |
  * | `MinInclusive N`               | statement.facets.MinInclusive |
  * | `MaxInclusive N`               | statement.facets.MaxInclusive |
  * | `MinLength N`                  | statement.facets.MinLength |
  * | `MaxLength N`                  | statement.facets.MaxLength |
+ *
+ * Prefixed names accept the PN_LOCAL range seen in the wild — local
+ * names with `-` and `.` (e.g. `bf:title-proper`) and the empty
+ * default prefix (`:name`) — not just the `\w` subset.
  *
  * @module from-shex
  * @see https://shex.io
@@ -48,21 +58,40 @@ import { stringify as stringifyYaml } from "@std/yaml";
 import { readInput, statusLog } from "./io.js";
 
 // ---------------------------------------------------------------------------
+// Shared token patterns
+// ---------------------------------------------------------------------------
+
+/**
+ * Regex source for a ShExC prefixed name (PNAME_LN, lenient).
+ *
+ * Prefix: optional (the default prefix `:name` is valid), starting
+ * with a letter, then letters/digits/`_`/`.`/`-`. Local: letters,
+ * digits, `_`, `.`, `-`. Broader than `\w+:\w+`, which silently
+ * dropped properties like `bf:title-proper` or `ex:has.part`.
+ *
+ * @type {string}
+ */
+const PNAME_SRC = "(?:[A-Za-z][\\w.-]*)?:[\\w-][\\w.-]*";
+
+// ---------------------------------------------------------------------------
 // Prefix / BASE parsing
 // ---------------------------------------------------------------------------
 
 /**
  * Extracts PREFIX declarations from ShExC source.
  *
+ * Accepts the empty default prefix (`PREFIX : <…>`, stored under the
+ * key `""`) and prefixes containing `-` or `.`.
+ *
  * @param {string} text - ShExC source text.
  * @returns {Object} Prefix-to-IRI map.
  */
 function parsePrefixes(text) {
   const prefixes = {};
-  const re = /^\s*PREFIX\s+(\w+):\s+<([^>]+)>/gmi;
+  const re = /^\s*PREFIX\s+([A-Za-z][\w.-]*)?:\s*<([^>]+)>/gmi;
   let m;
   while ((m = re.exec(text)) !== null) {
-    prefixes[m[1]] = m[2];
+    prefixes[m[1] ?? ""] = m[2];
   }
   return prefixes;
 }
@@ -184,8 +213,11 @@ function parseTripleConstraint(line) {
   }
 
   // General triple constraint: predicate followed by node constraint
-  // predicate is either a prefixed term (prefix:local) or <iri>
-  const predMatch = line.match(/^(<[^>]+>|[\w]+:[\w]+)\s+(.*)/);
+  // predicate is either a prefixed term (prefix:local, default-prefix
+  // :local, hyphens/dots allowed) or <iri>
+  const predMatch = line.match(
+    new RegExp(`^(<[^>]+>|${PNAME_SRC})\\s+(.*)`, "s"),
+  );
   if (!predMatch) return null;
 
   let property = predMatch[1];
@@ -224,8 +256,11 @@ function parseTripleConstraint(line) {
   }
   // Multi-datatype disjunction: (xsd:gYear OR xsd:gYearMonth OR xsd:date)
   // Mirrors what shex.js emits for multi-datatype statements.
-  else if (/^\(\s*[\w]+:[\w]+(?:\s+OR\s+[\w]+:[\w]+)+\s*\)/.test(rest)) {
-    const dtMatch = rest.match(/^\(\s*([\w:\s]+?)\s*\)(.*)/);
+  else if (
+    new RegExp(`^\\(\\s*${PNAME_SRC}(?:\\s+OR\\s+${PNAME_SRC})+\\s*\\)`)
+      .test(rest)
+  ) {
+    const dtMatch = rest.match(/^\(\s*([\w.:\s-]+?)\s*\)(.*)/s);
     if (dtMatch) {
       const dts = dtMatch[1].split(/\s+OR\s+/).map((s) => s.trim()).filter(Boolean);
       if (dts.length > 0) {
@@ -242,18 +277,46 @@ function parseTripleConstraint(line) {
       rest = shapeRefMatch[2].trim();
     }
   }
-  // Value set: ["val1" "val2"]
+  // Value set: ["val1" "val2"], [ex:a <http://…>], [ex:~] (IRI stem),
+  // [@en @ja] (language tags). Members may mix; quoted strings become
+  // literal values, IRIs/CURIEs become IRI values, `~`-suffixed stems
+  // become inScheme entries, and `@lang` tokens become languageTag.
   else if (rest.startsWith("[")) {
     const closeIdx = rest.indexOf("]");
     if (closeIdx >= 0) {
       const valueContent = rest.slice(1, closeIdx);
       const values = [];
-      const valRe = /"([^"]*)"/g;
-      let vm;
-      while ((vm = valRe.exec(valueContent)) !== null) {
-        values.push(vm[1]);
+      const schemes = [];
+      const langs = [];
+      let sawIri = false;
+      const tokenRe = /"((?:[^"\\]|\\.)*)"|<([^>]+)>(~)?|@([A-Za-z0-9-]+)|([^\s\]]+)/g;
+      let tm;
+      while ((tm = tokenRe.exec(valueContent)) !== null) {
+        if (tm[1] !== undefined) {
+          // Quoted literal — unescape \" and \\
+          values.push(tm[1].replace(/\\(["\\])/g, "$1"));
+        } else if (tm[2] !== undefined) {
+          sawIri = true;
+          if (tm[3]) schemes.push(tm[2]);
+          else values.push(tm[2]);
+        } else if (tm[4] !== undefined) {
+          langs.push(tm[4]);
+        } else if (tm[5]) {
+          sawIri = true;
+          const tok = tm[5];
+          // `prefix:~` is an IRI stem; bare CURIEs are IRI members.
+          if (tok.endsWith("~")) schemes.push(tok.slice(0, -1));
+          else values.push(tok);
+        }
+      }
+      if (langs.length > 0) stmt.languageTag = langs;
+      if (schemes.length > 0) {
+        stmt.inScheme = schemes.length === 1 ? schemes[0] : schemes;
       }
       if (values.length > 0) stmt.values = values;
+      // IRI members imply an IRI-typed statement, matching what the
+      // shex.js generator collapses into the value set.
+      if (sawIri && !stmt.type) stmt.type = "IRI";
       rest = rest.slice(closeIdx + 1).trim();
     }
   }
@@ -271,7 +334,7 @@ function parseTripleConstraint(line) {
   }
   // Datatype: prefix:localName or <iri>
   else {
-    const dtMatch = rest.match(/^(<[^>]+>|[\w]+:[\w]+)(.*)/);
+    const dtMatch = rest.match(new RegExp(`^(<[^>]+>|${PNAME_SRC})(.*)`, "s"));
     if (dtMatch) {
       let dt = dtMatch[1];
       if (dt.startsWith("<") && dt.endsWith(">")) dt = dt.slice(1, -1);
@@ -282,11 +345,21 @@ function parseTripleConstraint(line) {
 
   // Parse remaining facets and pattern from `rest`
 
-  // Pattern: //pattern//
-  const patternMatch = rest.match(/\/\/([^/]+)\/\//);
-  if (patternMatch) {
-    stmt.pattern = patternMatch[1];
-    rest = rest.replace(/\/\/[^/]+\/\//, "").trim();
+  // Pattern: valid ShExC uses single slashes with `\/` escapes
+  // (`/pat\/tern/`); the legacy yama-cli form `//pattern//` is still
+  // accepted for backward compatibility.
+  const legacyPattern = rest.match(/\/\/([^/]+)\/\//);
+  if (legacyPattern) {
+    stmt.pattern = legacyPattern[1];
+    rest = rest.replace(legacyPattern[0], "").trim();
+  } else {
+    const patternMatch = rest.match(/\/((?:[^/\\\n]|\\.)+)\//);
+    if (patternMatch) {
+      // Unescape only the slash escapes the emitter added; other
+      // regex escapes (\d, \., …) pass through untouched.
+      stmt.pattern = patternMatch[1].replace(/\\\//g, "/");
+      rest = rest.replace(patternMatch[0], "").trim();
+    }
   }
 
   // Numeric/string facets
@@ -335,13 +408,14 @@ function parseShapes(text, _prefixes, _base) {
     })
     .join("\n");
 
-  // Match shape blocks: <name> (EXTRA a)? { ... }
+  // Match shape blocks: <name> (EXTRA a)? (CLOSED)? { ... }
   // Use a manual brace-counting approach for robustness
-  const shapeStartRe = /<([^>]+)>\s*(?:EXTRA\s+a\s*)?\{/g;
+  const shapeStartRe = /<([^>]+)>((?:\s+(?:EXTRA\s+a|CLOSED))*)\s*\{/g;
   let match;
 
   while ((match = shapeStartRe.exec(cleaned)) !== null) {
     const shapeName = match[1];
+    const qualifiers = match[2] || "";
     const bodyStart = match.index + match[0].length;
 
     // Find matching closing brace
@@ -362,6 +436,10 @@ function parseShapes(text, _prefixes, _base) {
     const desc = {};
     const statements = {};
     const usedKeys = new Set();
+
+    // CLOSED qualifier → closed: true (shapes reject undeclared
+    // properties).
+    if (/\bCLOSED\b/.test(qualifiers)) desc.closed = true;
 
     for (const constraint of constraints) {
       const parsed = parseTripleConstraint(constraint.trim());
@@ -473,3 +551,5 @@ export async function importShEx(file, output) {
     console.log(yaml);
   }
 }
+
+export { parseShExToYama };
