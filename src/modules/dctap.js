@@ -49,7 +49,7 @@
 import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
 import * as XLSX from "xlsx";
-import { readInput, readInputBytes } from "./io.js";
+import { readInput, readInputBytes, writeStdoutSync } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // DCTAP column headers (canonical order)
@@ -157,7 +157,7 @@ function writeTabular(rows, output) {
     Deno.writeTextFileSync(output, result);
     console.error(`Written to ${output}`);
   } else {
-    Deno.stdout.writeSync(new TextEncoder().encode(result));
+    writeStdoutSync(new TextEncoder().encode(result));
   }
 }
 
@@ -211,13 +211,43 @@ function toValueNodeType(type) {
 }
 
 /**
+ * Joins multi-value constraint entries with commas.
+ *
+ * Comma is the deliberate, documented picklist separator for this
+ * tool pair (yama-cli and tapir) — DCTAP itself leaves the choice to
+ * implementations, and dctap-python defaults to whitespace. Commas
+ * inside a value cannot be escaped in-cell, so those values trigger
+ * a warning instead of silently corrupting the list.
+ *
+ * @param {Array<*>} entries  - Values to join.
+ * @param {string}   stmtName - Statement name for warning messages.
+ * @returns {string}
+ */
+function joinConstraintValues(entries, stmtName) {
+  for (const e of entries) {
+    if (String(e).includes(",")) {
+      console.warn(
+        `Warning: statement "${stmtName}": value "${e}" contains a comma, which is also the DCTAP list separator — re-import will split it.`,
+      );
+    }
+  }
+  return entries.join(",");
+}
+
+/**
  * Resolves DCTAP valueConstraint and valueConstraintType from YAMA fields.
  *
- * @param {Object} stmtDef - Statement definition.
+ * DCTAP rows carry a single valueConstraint, so when a statement
+ * declares several constraint kinds the highest-priority one wins
+ * and the shadowed ones are reported on stderr.
+ *
+ * @param {Object} stmtDef  - Statement definition.
+ * @param {string} stmtName - Statement name for warning messages.
  * @returns {{valueConstraint: string, valueConstraintType: string}}
  */
-function toValueConstraint(stmtDef) {
-  // inScheme → IRIstem (check before values since both may exist)
+function toValueConstraint(stmtDef, stmtName) {
+  const candidates = [];
+
   if (stmtDef.inScheme) {
     const raw = Array.isArray(stmtDef.inScheme)
       ? stmtDef.inScheme
@@ -228,56 +258,94 @@ function toValueConstraint(stmtDef) {
       if (s && typeof s === "object") return Object.keys(s)[0] + ":";
       return String(s);
     });
-    return {
-      valueConstraint: schemes.join(","),
+    candidates.push({
+      valueConstraint: joinConstraintValues(schemes, stmtName),
       valueConstraintType: "IRIstem",
-    };
+    });
   }
 
-  // languageTag → languageTag (check before values to preserve semantics)
   if (Array.isArray(stmtDef.languageTag) && stmtDef.languageTag.length > 0) {
-    return {
-      valueConstraint: stmtDef.languageTag.join(","),
+    candidates.push({
+      valueConstraint: joinConstraintValues(stmtDef.languageTag, stmtName),
       valueConstraintType: "languageTag",
-    };
+    });
   }
 
   if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
-    return {
-      valueConstraint: stmtDef.values.join(","),
+    candidates.push({
+      valueConstraint: joinConstraintValues(stmtDef.values, stmtName),
       valueConstraintType: "picklist",
-    };
+    });
   }
 
   if (stmtDef.pattern) {
-    return {
+    candidates.push({
       valueConstraint: stmtDef.pattern,
       valueConstraintType: "pattern",
-    };
+    });
   }
 
   if (stmtDef.facets) {
     const facetMap = {
       MinInclusive: "minInclusive",
       MaxInclusive: "maxInclusive",
+      MinExclusive: "minExclusive",
+      MaxExclusive: "maxExclusive",
       MinLength: "minLength",
       MaxLength: "maxLength",
     };
     for (const [yamaKey, dctapType] of Object.entries(facetMap)) {
       if (stmtDef.facets[yamaKey] != null) {
-        return {
+        candidates.push({
           valueConstraint: String(stmtDef.facets[yamaKey]),
           valueConstraintType: dctapType,
-        };
+        });
+      }
+    }
+    for (const key of Object.keys(stmtDef.facets)) {
+      if (!(key in facetMap)) {
+        console.warn(
+          `Warning: statement "${stmtName}": facet ${key} has no DCTAP valueConstraintType — dropped.`,
+        );
       }
     }
   }
 
-  return { valueConstraint: "", valueConstraintType: "" };
+  if (candidates.length === 0) {
+    return { valueConstraint: "", valueConstraintType: "" };
+  }
+  if (candidates.length > 1) {
+    const dropped = candidates.slice(1).map((c) => c.valueConstraintType);
+    console.warn(
+      `Warning: statement "${stmtName}": DCTAP rows hold one valueConstraint — kept ${
+        candidates[0].valueConstraintType
+      }, dropped ${dropped.join(", ")}.`,
+    );
+  }
+  return candidates[0];
+}
+
+/**
+ * Builds an empty DCTAP row with every canonical column blank.
+ *
+ * @returns {Object} Row object keyed by DCTAP column names.
+ */
+function emptyRow() {
+  const row = {};
+  for (const col of DCTAP_COLUMNS) row[col] = "";
+  return row;
 }
 
 /**
  * Converts a YAMA document to DCTAP rows.
+ *
+ * The shapeID is emitted on the first *emitted* row of each shape —
+ * property-less statements are skipped, so anchoring it to statement
+ * index 0 could orphan the whole shape and silently merge its rows
+ * into the previous shape on re-import. Shapes whose note would
+ * otherwise be lost (a note on a shape that has statements) get a
+ * dedicated header row (shapeID + shapeLabel + note, no propertyID)
+ * before their statement rows.
  *
  * @param {Object} doc - Parsed YAMA document.
  * @returns {Object[]} Array of row objects with DCTAP column keys.
@@ -288,35 +356,52 @@ function yamaToRows(doc) {
 
   for (const [descName, descDef] of Object.entries(descriptions)) {
     const statements = descDef.statements || {};
-    const stmtEntries = Object.entries(statements);
+    const stmtEntries = Object.entries(statements)
+      .filter(([, stmtDef]) => !!stmtDef.property);
 
     if (stmtEntries.length === 0) {
       rows.push({
+        ...emptyRow(),
         shapeID: descName,
         shapeLabel: descDef.label || "",
-        propertyID: "",
-        propertyLabel: "",
-        mandatory: "",
-        repeatable: "",
-        valueNodeType: "",
-        valueDataType: "",
-        valueConstraint: "",
-        valueConstraintType: "",
-        valueShape: "",
         note: descDef.note || "",
       });
       continue;
     }
 
-    for (let i = 0; i < stmtEntries.length; i++) {
-      const [, stmtDef] = stmtEntries[i];
-      if (!stmtDef.property) continue;
+    // Statement rows carry their own note, so a shape-level note
+    // needs a dedicated header row to survive the export.
+    let shapeEmitted = false;
+    if (descDef.note) {
+      rows.push({
+        ...emptyRow(),
+        shapeID: descName,
+        shapeLabel: descDef.label || "",
+        note: descDef.note,
+      });
+      shapeEmitted = true;
+    }
 
-      const { valueConstraint, valueConstraintType } = toValueConstraint(stmtDef);
+    for (const [stmtKey, stmtDef] of stmtEntries) {
+      const stmtName = stmtDef.label || stmtKey;
+
+      // DCTAP has no column for a statement-level class constraint.
+      if (stmtDef.a) {
+        console.warn(
+          `Warning: statement "${stmtName}": class constraint (a: ${
+            Array.isArray(stmtDef.a) ? stmtDef.a.join(", ") : stmtDef.a
+          }) has no DCTAP column — dropped.`,
+        );
+      }
+
+      const { valueConstraint, valueConstraintType } = toValueConstraint(
+        stmtDef,
+        stmtName,
+      );
 
       rows.push({
-        shapeID: i === 0 ? descName : "",
-        shapeLabel: i === 0 ? (descDef.label || "") : "",
+        shapeID: shapeEmitted ? "" : descName,
+        shapeLabel: shapeEmitted ? "" : (descDef.label || ""),
         propertyID: stmtDef.property,
         propertyLabel: stmtDef.label || "",
         mandatory: toMandatory(stmtDef.min),
@@ -334,6 +419,7 @@ function yamaToRows(doc) {
           : (stmtDef.description || ""),
         note: stmtDef.note || "",
       });
+      shapeEmitted = true;
     }
   }
 
@@ -397,17 +483,25 @@ function fromValueNodeType(nodeType) {
 /**
  * Resolves YAMA constraint fields from DCTAP valueConstraint/Type.
  *
+ * A bare valueConstraint with no valueConstraintType is legal DCTAP
+ * (it means the value must match the constraint literally), so it
+ * imports as a one-element `values` list. Unknown constraint types
+ * import the same way, with a warning.
+ *
  * @param {string} constraint
  * @param {string} constraintType
  * @returns {Object} Partial statement definition with values/pattern/facets.
  */
 function fromValueConstraint(constraint, constraintType) {
-  if (!constraint || !constraintType) return {};
+  if (!constraint) return {};
 
-  const type = String(constraintType).trim().toLowerCase();
+  const type = String(constraintType || "").trim().toLowerCase();
   const val = String(constraint).trim();
+  if (!val) return {};
 
   switch (type) {
+    case "":
+      return { values: [val] };
     case "picklist":
       return { values: val.split(",").map((v) => v.trim()) };
     case "pattern":
@@ -426,6 +520,14 @@ function fromValueConstraint(constraint, constraintType) {
       const n = Number(val);
       return Number.isNaN(n) ? {} : { facets: { MaxInclusive: n } };
     }
+    case "minexclusive": {
+      const n = Number(val);
+      return Number.isNaN(n) ? {} : { facets: { MinExclusive: n } };
+    }
+    case "maxexclusive": {
+      const n = Number(val);
+      return Number.isNaN(n) ? {} : { facets: { MaxExclusive: n } };
+    }
     case "minlength": {
       const n = Number(val);
       return Number.isNaN(n) ? {} : { facets: { MinLength: n } };
@@ -435,7 +537,10 @@ function fromValueConstraint(constraint, constraintType) {
       return Number.isNaN(n) ? {} : { facets: { MaxLength: n } };
     }
     default:
-      return {};
+      console.warn(
+        `Warning: unknown valueConstraintType "${constraintType}" — imported "${val}" as a literal value match.`,
+      );
+      return { values: [val] };
   }
 }
 
