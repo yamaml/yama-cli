@@ -1,0 +1,7 @@
+[@NS]
+@base	http://example.org/schema#
+
+[MAIN]
+#Name	Property	Min	Max	ValueType	Constraint	Comment
+ID	foaf:Document	1	1	ID	http://example.org/records/
+Title	dcterms:title	1	1	literal	xsd:string

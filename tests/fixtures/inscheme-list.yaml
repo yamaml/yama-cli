@@ -1,0 +1,17 @@
+# The YAMAML spec's §4.5 multi-scheme list form. The unquoted
+# `- ndlsh:` entries parse to `{ ndlsh: null }` objects, which used
+# to crash the OWL-DSP generator.
+base: http://example.org/ap#
+namespaces:
+  ndlsh: http://id.ndl.go.jp/auth/ndlsh/
+  lcsh: http://id.loc.gov/authorities/subjects/
+descriptions:
+  MAIN:
+    a: foaf:Document
+    statements:
+      subject:
+        property: dcterms:subject
+        type: IRI
+        inScheme:
+          - ndlsh:
+          - lcsh:

@@ -1,0 +1,11 @@
+# A description with a class but no id mapping — a SimpleDSP
+# round-trip must not invent an `id:` for it.
+base: http://example.org/ap#
+descriptions:
+  address:
+    a: schema:PostalAddress
+    statements:
+      street:
+        property: schema:streetAddress
+        type: literal
+        datatype: xsd:string

@@ -1,0 +1,31 @@
+# Spec §5.4: a statement mapping reading from a different source
+# than the description's id mapping.
+base: http://example.org/people/
+defaults:
+  mapping:
+    source: characters.csv
+    type: csv
+descriptions:
+  character:
+    a: foaf:Person
+    label: Character
+    id:
+      mapping:
+        path: ID
+    statements:
+      name:
+        property: foaf:name
+        datatype: xsd:string
+        mapping:
+          path: name
+      strange:
+        property: ex:strange
+        datatype: xsd:unknownThing
+        mapping:
+          path: strange
+      wikidata:
+        property: rdfs:seeAlso
+        type: IRI
+        mapping:
+          source: External Data.csv
+          path: wikidata_id

@@ -21,9 +21,11 @@
   },
   "tasks": {
     "start": "deno run --allow-read --allow-write --allow-env --allow-net src/yama.js",
-    "compile": "deno compile --allow-read --allow-write --allow-env --allow-net --output yama src/yama.js"
+    "compile": "deno compile --allow-read --allow-write --allow-env --allow-net --output yama src/yama.js",
+    "test": "deno test --allow-read --allow-write --allow-env tests/"
   },
   "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/cli": "jsr:@std/cli@^1.0.28",
     "@std/csv": "jsr:@std/csv@^1.0.6",
     "@std/path": "jsr:@std/path@^1.1.4",

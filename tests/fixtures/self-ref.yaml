@@ -1,0 +1,17 @@
+# First description is self-referenced and referenced from a second
+# block — exercises the [MAIN] rename/#MAIN ref rewriting on
+# SimpleDSP export.
+base: http://example.org/ap#
+descriptions:
+  thing:
+    a: schema:Thing
+    statements:
+      parent:
+        property: schema:isPartOf
+        type: IRI
+        description: thing
+  other:
+    statements:
+      rel:
+        property: dcterms:relation
+        description: thing

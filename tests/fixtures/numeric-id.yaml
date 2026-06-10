@@ -1,0 +1,35 @@
+# Spec §2.4-style inline data with numeric record IDs and an
+# array-valued field.
+base: http://example.org/data/
+data:
+  - id: 1
+    name: 山田太郎
+    tags:
+      - fiction
+      - classic
+  - id: 2
+    name: Alice
+descriptions:
+  person:
+    a: foaf:Person
+    id:
+      mapping:
+        source: data
+        path: id
+    statements:
+      name:
+        property: foaf:name
+        datatype: xsd:string
+        mapping:
+          source: data
+          path: name
+      plain:
+        property: schema:description
+        mapping:
+          source: data
+          path: name
+      tag:
+        property: dcterms:subject
+        mapping:
+          source: data
+          path: tags

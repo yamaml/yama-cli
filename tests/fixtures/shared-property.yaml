@@ -1,0 +1,16 @@
+# The same property used by two descriptions with different classes —
+# rdfs:domain must be emitted once (first wins), not accumulated.
+base: http://example.org/ap#
+descriptions:
+  book:
+    a: schema:Book
+    statements:
+      name:
+        property: schema:name
+        datatype: xsd:string
+  person:
+    a: schema:Person
+    statements:
+      name:
+        property: schema:name
+        datatype: xsd:string

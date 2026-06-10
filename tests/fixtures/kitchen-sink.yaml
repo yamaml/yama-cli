@@ -1,0 +1,83 @@
+base: http://example.org/ap#
+namespaces:
+  ex: http://example.org/vocab#
+descriptions:
+  book:
+    a: schema:Book
+    label: Book
+    note: A described book
+    closed: true
+    statements:
+      title:
+        property: dcterms:title
+        type: literal
+        datatype: xsd:string
+        min: 1
+        max: 1
+      issn:
+        property: ex:issn
+        type: literal
+        pattern: "^\\d{4}/\\d{3}$"
+        max: 1
+      format:
+        property: dcterms:format
+        type: literal
+        values:
+          - print
+          - e"book
+      license:
+        property: dcterms:license
+        type: IRI
+        values:
+          - http://creativecommons.org/licenses/by/4.0/
+          - ex:custom
+      subject:
+        property: dcterms:subject
+        type: IRI
+        inScheme:
+          - skos:
+      lang:
+        property: dcterms:language
+        type: literal
+        languageTag:
+          - en
+          - ja
+      age:
+        property: foaf:age
+        datatype: xsd:integer
+        facets:
+          MinExclusive: 0
+          MaxExclusive: 150
+      size:
+        property: ex:size
+        type: literal
+        facets:
+          MinLength: 1
+          MaxLength: 3
+      isbn:
+        property: schema:isbn
+        type: literal
+        facets:
+          Length: 13
+      agent:
+        property: dcterms:creator
+        type: IRI
+        a: foaf:Agent
+      author:
+        property: dcterms:contributor
+        min: 1
+        description:
+          - person
+          - org
+      misc:
+        property: ex:misc
+  person:
+    a: foaf:Person
+    statements:
+      name:
+        property: foaf:name
+        min: 1
+  org:
+    statements:
+      name:
+        property: foaf:name

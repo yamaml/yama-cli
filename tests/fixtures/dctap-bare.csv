@@ -1,0 +1,3 @@
+shapeID,propertyID,valueConstraint,valueConstraintType
+book,dcterms:title,Exact Title,
+book,dcterms:format,whatever,unknownType
