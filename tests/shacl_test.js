@@ -170,6 +170,45 @@ Deno.test("shacl: inScheme on non-IRI statement warns instead of emitting", asyn
   });
 });
 
+Deno.test("shacl: whitespace in an IRI value warns and is skipped from sh:in", async () => {
+  await withTempDir(async (dir) => {
+    const profile = `${dir}/p.yaml`;
+    await Deno.writeTextFile(
+      profile,
+      [
+        "namespaces:",
+        "  bibo: http://purl.org/ontology/bibo/",
+        "descriptions:",
+        "  MAIN:",
+        "    statements:",
+        "      class:",
+        "        property: rdf:type",
+        "        type: IRI",
+        "        values:",
+        '          - "bibo:Periodical bibo:Journal"',
+        "          - bibo:Book",
+      ].join("\n"),
+    );
+    const out = `${dir}/out.ttl`;
+    const { warnings } = await captureWarnings(() =>
+      quietly(() => generateSHACL(profile, { output: out }))
+    );
+    assert(
+      warnings.some((w) => w.includes("class") && w.includes("whitespace")),
+      `expected whitespace warning, got: ${warnings.join("; ")}`,
+    );
+    // The malformed member is dropped; the output stays parseable.
+    const store = parseTurtle(await Deno.readTextFile(out));
+    const shape = propShape(
+      store,
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+    );
+    const items = rdfList(store, store.getObjects(shape, `${SH}in`, null)[0]);
+    assertEquals(items.length, 1);
+    assertEquals(items[0].value, "http://purl.org/ontology/bibo/Book");
+  });
+});
+
 Deno.test("shacl: TotalDigits/FractionDigits warn (not expressible)", async () => {
   await withTempDir(async (dir) => {
     const profile = `${dir}/p.yaml`;

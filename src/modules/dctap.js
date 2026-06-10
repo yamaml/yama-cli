@@ -490,9 +490,10 @@ function fromValueNodeType(nodeType) {
  *
  * @param {string} constraint
  * @param {string} constraintType
+ * @param {string} [stmtType] - Resolved YAMA statement type (IRI/literal/BNODE).
  * @returns {Object} Partial statement definition with values/pattern/facets.
  */
-function fromValueConstraint(constraint, constraintType) {
+function fromValueConstraint(constraint, constraintType, stmtType) {
   if (!constraint) return {};
 
   const type = String(constraintType || "").trim().toLowerCase();
@@ -500,8 +501,18 @@ function fromValueConstraint(constraint, constraintType) {
   if (!val) return {};
 
   switch (type) {
-    case "":
+    case "": {
+      // Bare constraint on an IRI statement: DCMI SRAP writes
+      // space-separated IRI lists (e.g. "bibo:Periodical bibo:Journal"),
+      // so whitespace splits into one value per IRI. A single IRI can
+      // never contain whitespace, so this is safe. Non-IRI statements
+      // keep the single-string literal match (spaces are legal there).
+      const t = String(stmtType || "").toUpperCase();
+      if ((t === "IRI" || t === "URI") && /\s/.test(val)) {
+        return { values: val.split(/\s+/).filter(Boolean) };
+      }
       return { values: [val] };
+    }
     case "picklist":
       return { values: val.split(",").map((v) => v.trim()) };
     case "pattern":
@@ -710,6 +721,7 @@ export function rowsToYama(rows) {
     const constraints = fromValueConstraint(
       row.valueConstraint || "",
       row.valueConstraintType || "",
+      yamaType,
     );
     Object.assign(stmt, constraints);
 

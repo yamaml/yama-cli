@@ -11,7 +11,15 @@ import { assert, assertEquals } from "@std/assert";
 import { parse as parseCsv } from "@std/csv";
 import { parse as parseYaml } from "@std/yaml";
 import { exportDCTAP, importDCTAP, rowsToYama } from "../src/modules/dctap.js";
-import { captureWarnings, fixture, quietly, withTempDir } from "./helpers.js";
+import { generateSHACL } from "../src/modules/shacl.js";
+import {
+  captureWarnings,
+  fixture,
+  parseTurtle,
+  quietly,
+  rdfList,
+  withTempDir,
+} from "./helpers.js";
 
 async function exportRows(profilePath) {
   return await withTempDir(async (dir) => {
@@ -97,6 +105,58 @@ Deno.test("dctap: decision 9 bare and unknown valueConstraints import as values"
     warnings.some((w) => w.includes("unknownType")),
     "unknown constraint type warns",
   );
+});
+
+Deno.test("dctap: srap untyped multi-iri valueConstraint splits and yields parseable sh:in", async () => {
+  await withTempDir(async (dir) => {
+    // SRAP-style rows: empty valueConstraintType, IRI node type, and a
+    // space-separated IRI list in valueConstraint (DCMI SRAP April model
+    // rows 76/82). The literal row keeps its single-string behaviour.
+    const csv = `${dir}/srap.csv`;
+    await Deno.writeTextFile(csv, [
+      "shapeID,propertyID,propertyLabel,valueNodeType,valueDatatype,valueConstraint,valueConstraintType,note",
+      "Periodical,rdf:type,Class,IRI,,bibo:Periodical bibo:Journal,,",
+      ",dct:title,Title,literal,xsd:string,Exact Title Words,,",
+      "",
+    ].join("\n"));
+
+    const back = `${dir}/back.yaml`;
+    await quietly(() => importDCTAP(csv, back));
+    const doc = parseYaml(await Deno.readTextFile(back));
+    const stmts = doc.descriptions.Periodical.statements;
+    assertEquals(stmts.type.values, ["bibo:Periodical", "bibo:Journal"]);
+    assertEquals(stmts.title.values, ["Exact Title Words"], "literal stays whole");
+
+    // Pipe through the SHACL generator: the output must be valid
+    // Turtle with two IRI members in sh:in.
+    const profile = `${dir}/profile.yaml`;
+    await Deno.writeTextFile(profile, [
+      "base: http://example.org/ap#",
+      "namespaces:",
+      "  bibo: http://purl.org/ontology/bibo/",
+      "  dct: http://purl.org/dc/terms/",
+      await Deno.readTextFile(back),
+    ].join("\n"));
+    const ttl = `${dir}/out.ttl`;
+    await captureWarnings(() => quietly(() => generateSHACL(profile, { output: ttl })));
+
+    const SH = "http://www.w3.org/ns/shacl#";
+    const store = parseTurtle(await Deno.readTextFile(ttl)); // throws on bad Turtle
+    const pathQuad = store.getQuads(
+      null,
+      `${SH}path`,
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+      null,
+    )[0];
+    const inHead = store.getObjects(pathQuad.subject, `${SH}in`, null)[0];
+    const items = rdfList(store, inHead);
+    assertEquals(items.length, 2);
+    assertEquals(items.map((i) => i.termType), ["NamedNode", "NamedNode"]);
+    assertEquals(items.map((i) => i.value), [
+      "http://purl.org/ontology/bibo/Periodical",
+      "http://purl.org/ontology/bibo/Journal",
+    ]);
+  });
 });
 
 Deno.test("dctap: decision 8 comma inside a picklist value warns", async () => {

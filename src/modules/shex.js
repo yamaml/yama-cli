@@ -242,6 +242,14 @@ function formatNodeConstraint(stmt, ctx) {
   if (Array.isArray(stmt.values) && stmt.values.length > 0) {
     const isIriType = ["IRI", "URI"].includes((stmt.type || "").toUpperCase());
     for (const v of stmt.values) {
+      // Defensive (mirrors shacl.js): an IRI token containing whitespace
+      // can never form valid ShExC — warn and skip the member.
+      if (isIriType && /\s/.test(String(v))) {
+        console.warn(
+          `Warning: statement "${stmt.property}": IRI value "${v}" contains whitespace — skipped from value set.`,
+        );
+        continue;
+      }
       setItems.push(
         isIriType
           ? formatIriToken(String(v), ctx)

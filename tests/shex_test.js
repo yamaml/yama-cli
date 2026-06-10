@@ -193,3 +193,25 @@ descriptions:
     "ex:num (xsd:integer OR xsd:decimal) AND MinInclusive 1",
   );
 });
+
+Deno.test("shex: whitespace in an IRI value warns and is skipped from the value set", async () => {
+  const { text, warnings } = await shexFromYaml(`
+namespaces:
+  bibo: http://purl.org/ontology/bibo/
+descriptions:
+  MAIN:
+    statements:
+      class:
+        property: rdf:type
+        type: IRI
+        values:
+          - "bibo:Periodical bibo:Journal"
+          - bibo:Book
+`);
+  assert(
+    warnings.some((w) => w.includes("rdf:type") && w.includes("whitespace")),
+    `expected whitespace warning, got: ${warnings.join("; ")}`,
+  );
+  assertStringIncludes(text, "[bibo:Book]");
+  assert(!text.includes("bibo:Periodical"), "malformed member dropped");
+});

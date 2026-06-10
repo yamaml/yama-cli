@@ -347,13 +347,28 @@ function buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads
   if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
     const stmtType = (stmtDef.type || "").toUpperCase();
     const isIriType = stmtType === "IRI" || stmtType === "URI";
-    const items = stmtDef.values.map((v) =>
-      isIriType
-        ? namedNode(expandPrefixed(String(v), namespaces, base))
-        : literal(String(v))
-    );
-    const listHead = buildRdfList(items, quads);
-    quads.push(quad(propNode, SH_IN, listHead));
+    const items = [];
+    for (const v of stmtDef.values) {
+      if (isIriType) {
+        const iri = expandPrefixed(String(v), namespaces, base);
+        // Defensive: an IRI term containing whitespace serializes as
+        // unparseable Turtle (`<http://… …>`) — warn and skip the
+        // member rather than emit a broken shapes graph.
+        if (/\s/.test(iri)) {
+          console.warn(
+            `Warning: statement "${stmtKey}": IRI value "${v}" contains whitespace — skipped from sh:in.`,
+          );
+          continue;
+        }
+        items.push(namedNode(iri));
+      } else {
+        items.push(literal(String(v)));
+      }
+    }
+    if (items.length > 0) {
+      const listHead = buildRdfList(items, quads);
+      quads.push(quad(propNode, SH_IN, listHead));
+    }
   }
 }
 
