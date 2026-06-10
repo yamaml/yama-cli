@@ -204,6 +204,7 @@ Deno.test("dctap: round-trip preserves constraints", async () => {
     assertEquals(stmts.title.max, 1);
     assertEquals(stmts.title.datatype, "xsd:string");
     assertEquals(stmts.title.type, "literal");
+    // key is derived from propertyID local name on re-import, not preserved from the original YAML
     assertEquals(stmts.language.languageTag, ["en", "ja"]);
     assertEquals(stmts.age.facets.MinExclusive, 0);
     assertEquals(stmts.subject.inScheme, "skos:");

@@ -123,6 +123,25 @@ Deno.test("shacl: inScheme approximated as anchored sh:pattern", async () => {
   );
 });
 
+Deno.test("shacl: multiple inScheme entries emit sh:or of anchored patterns", async () => {
+  const { store } = await shaclStore("inscheme-list.yaml");
+  const subject = propShape(store, `${DCT}subject`);
+  assert(subject, "subject property shape exists");
+
+  const orHeads = store.getObjects(subject, `${SH}or`, null);
+  assertEquals(orHeads.length, 1, "sh:or present");
+
+  const members = rdfList(store, orHeads[0]);
+  assertEquals(members.length, 2);
+  const patterns = members.map(
+    (m) => store.getObjects(m, `${SH}pattern`, null)[0].value,
+  );
+  assertEquals(patterns, [
+    "^http://id\\.ndl\\.go\\.jp/auth/ndlsh/",
+    "^http://id\\.loc\\.gov/authorities/subjects/",
+  ]);
+});
+
 Deno.test("shacl: inScheme on non-IRI statement warns instead of emitting", async () => {
   await withTempDir(async (dir) => {
     const profile = `${dir}/p.yaml`;

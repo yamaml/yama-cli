@@ -171,3 +171,25 @@ descriptions:
 `);
   assertStringIncludes(text, 'xsd:string AND ["draft" "final"]');
 });
+
+Deno.test("shex: facets on a datatype disjunction join as a separate AND group", async () => {
+  const { text } = await shexFromYaml(`
+namespaces:
+  ex: http://example.org/vocab#
+descriptions:
+  MAIN:
+    statements:
+      num:
+        property: ex:num
+        type: literal
+        datatype:
+          - xsd:integer
+          - xsd:decimal
+        facets:
+          MinInclusive: 1
+`);
+  assertStringIncludes(
+    text,
+    "ex:num (xsd:integer OR xsd:decimal) AND MinInclusive 1",
+  );
+});
