@@ -27,10 +27,18 @@
  * | statement.type (BNODE)  | sh:nodeKind sh:BlankNodeOrIRI|
  * | statement.description (single) | sh:node (shape reference)    |
  * | statement.description (many)   | sh:or ([sh:node ... ])       |
+ * | statement.a              | sh:class                     |
  * | statement.facets.MinInclusive | sh:minInclusive        |
  * | statement.facets.MaxInclusive | sh:maxInclusive        |
- * | statement.pattern       | sh:pattern                   |
- * | statement.values        | sh:in                        |
+ * | statement.facets.MinExclusive | sh:minExclusive        |
+ * | statement.facets.MaxExclusive | sh:maxExclusive        |
+ * | statement.facets.MinLength    | sh:minLength           |
+ * | statement.facets.MaxLength    | sh:maxLength           |
+ * | statement.facets.Length       | sh:minLength + sh:maxLength |
+ * | statement.languageTag    | sh:languageIn                |
+ * | statement.inScheme       | sh:pattern (anchored stem)   |
+ * | statement.pattern        | sh:pattern                   |
+ * | statement.values         | sh:in                        |
  *
  * @module shacl
  * @see https://www.w3.org/TR/shacl/
@@ -40,6 +48,11 @@ import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
 import { datatypes, descRefs, readInput } from "./io.js";
+import {
+  collectUsedStandardPrefixes,
+  expandPrefixed,
+  STANDARD_PREFIXES,
+} from "./prefixes.js";
 
 const { DataFactory } = N3;
 const { namedNode, literal, blankNode, quad } = DataFactory;
@@ -71,8 +84,14 @@ const SH_MAX_COUNT        = namedNode(`${SH}maxCount`);
 const SH_DATATYPE         = namedNode(`${SH}datatype`);
 const SH_NODE_KIND        = namedNode(`${SH}nodeKind`);
 const SH_NODE             = namedNode(`${SH}node`);
+const SH_CLASS            = namedNode(`${SH}class`);
 const SH_MIN_INCLUSIVE    = namedNode(`${SH}minInclusive`);
 const SH_MAX_INCLUSIVE    = namedNode(`${SH}maxInclusive`);
+const SH_MIN_EXCLUSIVE    = namedNode(`${SH}minExclusive`);
+const SH_MAX_EXCLUSIVE    = namedNode(`${SH}maxExclusive`);
+const SH_MIN_LENGTH       = namedNode(`${SH}minLength`);
+const SH_MAX_LENGTH       = namedNode(`${SH}maxLength`);
+const SH_LANGUAGE_IN      = namedNode(`${SH}languageIn`);
 const SH_PATTERN          = namedNode(`${SH}pattern`);
 const SH_IN               = namedNode(`${SH}in`);
 const SH_IRI              = namedNode(`${SH}IRI`);
@@ -96,25 +115,30 @@ const XSD_BOOLEAN          = namedNode(`${XSD}boolean`);
 // ---------------------------------------------------------------------------
 
 /**
- * Expands a prefixed term (e.g. `foaf:name`) to a full IRI.
+ * Escapes regex metacharacters in a string so it can be embedded
+ * verbatim in a `sh:pattern` regular expression.
  *
- * @param {string} term
- * @param {Object} namespaces - Prefix-to-IRI map.
- * @param {string} base       - Fallback base IRI.
- * @returns {string|null} Full IRI, or null if term is falsy.
+ * @param {string} s
+ * @returns {string}
  */
-function expandPrefixed(term, namespaces, base) {
-  if (!term) return null;
-  if (/^(https?|urn):/.test(term)) return term;
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-  const colon = term.indexOf(":");
-  if (colon >= 0) {
-    const prefix = term.substring(0, colon);
-    const local = term.substring(colon + 1);
-    if (namespaces[prefix]) return namespaces[prefix] + local;
-  }
-
-  return base ? base + term : term;
+/**
+ * Normalises an `inScheme` entry to a string.
+ *
+ * YAML parses the unquoted list form `- ndlsh:` as `{ ndlsh: null }`
+ * rather than the string `"ndlsh:"`; this restores the intended
+ * scheme reference.
+ *
+ * @param {string|Object} s
+ * @returns {string}
+ */
+function normalizeScheme(s) {
+  if (typeof s === "string") return s;
+  if (s && typeof s === "object") return Object.keys(s)[0] + ":";
+  return String(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -259,16 +283,69 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
     quads.push(quad(propNode, SH_OR, listHead));
   }
 
-  // Facets
+  // sh:class from statement-level class constraint (a). Multiple
+  // classes mean "instance of one of" in YAMAML (SimpleDSP Table 17),
+  // so the list form becomes sh:or of nested sh:class blank nodes.
+  if (stmtDef.a) {
+    const classes = Array.isArray(stmtDef.a) ? stmtDef.a : [stmtDef.a];
+    if (classes.length === 1) {
+      const classIri = expandPrefixed(classes[0], namespaces, base);
+      quads.push(quad(propNode, SH_CLASS, namedNode(classIri)));
+    } else if (classes.length > 1) {
+      const classAnons = classes.map((c) => {
+        const anon = blankNode();
+        const classIri = expandPrefixed(c, namespaces, base);
+        quads.push(quad(anon, SH_CLASS, namedNode(classIri)));
+        return anon;
+      });
+      const listHead = buildRdfList(classAnons, quads);
+      quads.push(quad(propNode, SH_OR, listHead));
+    }
+  }
+
+  // Facets — numeric facets use xsd:decimal, length facets xsd:integer.
+  // Length has no direct SHACL counterpart; sh:minLength + sh:maxLength
+  // with the same value expresses it exactly. TotalDigits and
+  // FractionDigits cannot be expressed in core SHACL.
   if (stmtDef.facets) {
-    if (stmtDef.facets.MinInclusive != null) {
-      quads.push(quad(propNode, SH_MIN_INCLUSIVE,
-        literal(String(stmtDef.facets.MinInclusive), XSD_DECIMAL)));
+    const f = stmtDef.facets;
+    const numeric = [
+      [f.MinInclusive, SH_MIN_INCLUSIVE],
+      [f.MaxInclusive, SH_MAX_INCLUSIVE],
+      [f.MinExclusive, SH_MIN_EXCLUSIVE],
+      [f.MaxExclusive, SH_MAX_EXCLUSIVE],
+    ];
+    for (const [value, pred] of numeric) {
+      if (value != null) {
+        quads.push(quad(propNode, pred, literal(String(value), XSD_DECIMAL)));
+      }
     }
-    if (stmtDef.facets.MaxInclusive != null) {
-      quads.push(quad(propNode, SH_MAX_INCLUSIVE,
-        literal(String(stmtDef.facets.MaxInclusive), XSD_DECIMAL)));
+    if (f.MinLength != null) {
+      quads.push(quad(propNode, SH_MIN_LENGTH,
+        literal(String(f.MinLength), XSD_INTEGER)));
     }
+    if (f.MaxLength != null) {
+      quads.push(quad(propNode, SH_MAX_LENGTH,
+        literal(String(f.MaxLength), XSD_INTEGER)));
+    }
+    if (f.Length != null) {
+      quads.push(quad(propNode, SH_MIN_LENGTH,
+        literal(String(f.Length), XSD_INTEGER)));
+      quads.push(quad(propNode, SH_MAX_LENGTH,
+        literal(String(f.Length), XSD_INTEGER)));
+    }
+    if (f.TotalDigits != null || f.FractionDigits != null) {
+      console.warn(
+        `Warning: statement "${stmtDef.property}": TotalDigits/FractionDigits facets cannot be expressed in SHACL — dropped.`,
+      );
+    }
+  }
+
+  // sh:languageIn from languageTag (list of language tag strings)
+  if (Array.isArray(stmtDef.languageTag) && stmtDef.languageTag.length > 0) {
+    const items = stmtDef.languageTag.map((t) => literal(String(t)));
+    const listHead = buildRdfList(items, quads);
+    quads.push(quad(propNode, SH_LANGUAGE_IN, listHead));
   }
 
   // sh:pattern
@@ -276,9 +353,50 @@ function buildPropertyShape(shapeNode, stmtDef, namespaces, base, quads) {
     quads.push(quad(propNode, SH_PATTERN, literal(stmtDef.pattern)));
   }
 
-  // sh:in (enumerated values)
+  // inScheme — SHACL has no vocabulary-scheme constraint, so each
+  // scheme stem is approximated as an anchored sh:pattern on the IRI
+  // string ("values start with the expanded namespace"). Multiple
+  // schemes become sh:or of pattern blank nodes.
+  if (stmtDef.inScheme) {
+    const schemes = (Array.isArray(stmtDef.inScheme)
+      ? stmtDef.inScheme
+      : [stmtDef.inScheme]).map(normalizeScheme);
+    const stmtType = (stmtDef.type || "").toUpperCase();
+    if (stmtType !== "IRI" && stmtType !== "URI") {
+      console.warn(
+        `Warning: statement "${stmtDef.property}": inScheme on a non-IRI statement cannot be expressed in SHACL — dropped.`,
+      );
+    } else {
+      // A scheme like "ndlsh:" expands to the bare namespace IRI
+      // (empty local part); full URIs pass through unchanged.
+      const stems = schemes.map((s) => expandPrefixed(s, namespaces, base));
+      if (stems.length === 1) {
+        quads.push(quad(propNode, SH_PATTERN,
+          literal(`^${escapeRegex(stems[0])}`)));
+      } else {
+        const stemAnons = stems.map((stem) => {
+          const anon = blankNode();
+          quads.push(quad(anon, SH_PATTERN, literal(`^${escapeRegex(stem)}`)));
+          return anon;
+        });
+        const listHead = buildRdfList(stemAnons, quads);
+        quads.push(quad(propNode, SH_OR, listHead));
+      }
+    }
+  }
+
+  // sh:in (enumerated values) — IRI-typed statements get IRI terms
+  // (CURIEs expanded through the resolution map), literal statements
+  // get string literals. An IRI node can never equal a string literal,
+  // so emitting literals for IRI values would be unsatisfiable.
   if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
-    const items = stmtDef.values.map((v) => literal(String(v)));
+    const stmtType = (stmtDef.type || "").toUpperCase();
+    const isIriType = stmtType === "IRI" || stmtType === "URI";
+    const items = stmtDef.values.map((v) =>
+      isIriType
+        ? namedNode(expandPrefixed(String(v), namespaces, base))
+        : literal(String(v))
+    );
     const listHead = buildRdfList(items, quads);
     quads.push(quad(propNode, SH_IN, listHead));
   }
@@ -361,12 +479,18 @@ function buildShaclQuads(doc, namespaces, base) {
 export async function generateSHACL(file, { output = "", format = "turtle" } = {}) {
   const doc = parseYaml(await readInput(file));
 
-  const namespaces = {
-    sh: SH,
-    ...(doc.namespaces || {}),
-  };
+  // CURIEs resolve through the standard prefix table with user
+  // declarations taking precedence (YAMAML §2.2). The output declares
+  // the user's prefixes plus any standard ones that actually resolved.
+  const userNamespaces = doc.namespaces || {};
+  const resolutionNamespaces = { ...STANDARD_PREFIXES, ...userNamespaces };
   const base = doc.base || "";
 
-  const quads = buildShaclQuads(doc, namespaces, base);
-  await serializeRdf(quads, namespaces, base, output, format);
+  const quads = buildShaclQuads(doc, resolutionNamespaces, base);
+  const outputNamespaces = {
+    sh: SH,
+    ...userNamespaces,
+    ...collectUsedStandardPrefixes(quads, { sh: SH, ...userNamespaces }),
+  };
+  await serializeRdf(quads, outputNamespaces, base, output, format);
 }
