@@ -175,6 +175,23 @@ function inferTypeFromPath(filePath) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Rejects ID column names that cannot be embedded in a JSONata
+ * backtick-quoted path. ID *values* are bound as variables and need
+ * no escaping, but the column *name* is interpolated literally, and
+ * JSONata's backtick quoting has no escape sequence.
+ *
+ * @param {string} idColumn - Name of the ID field.
+ * @throws {Error} If the column name contains a backtick.
+ */
+function assertSafeIdColumn(idColumn) {
+  if (String(idColumn).includes("`")) {
+    throw new Error(
+      `ID column name "${idColumn}" contains a backtick, which cannot be used in a JSONata path — rename the column.`,
+    );
+  }
+}
+
+/**
  * Extracts all unique ID values from a dataset.
  *
  * @param {Object[]} data     - Loaded records.
@@ -182,6 +199,7 @@ function inferTypeFromPath(filePath) {
  * @returns {Promise<string[]>}
  */
 async function extractIds(data, idColumn) {
+  assertSafeIdColumn(idColumn);
   const result = await jsonata(`$.\`${idColumn}\``).evaluate(data);
   if (result === undefined) return [];
   return Array.isArray(result) ? result : [result];
@@ -203,6 +221,9 @@ async function extractIds(data, idColumn) {
  * @returns {Promise<*>}
  */
 async function extractValue(data, idColumn, idValue, fieldPath) {
+  // Blank-node descriptions can carry their own id column, which never
+  // passes through extractIds — guard here too.
+  assertSafeIdColumn(idColumn);
   const expr = `$[$string(\`${idColumn}\`) = $idVal].\`${fieldPath}\``;
   return await jsonata(expr).evaluate(data, { idVal: String(idValue) });
 }

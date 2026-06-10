@@ -7,7 +7,7 @@
  * standard prefix fallback.
  */
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { generateRDF } from "../src/modules/rdf.js";
 import { fixture, parseTurtle, quietly, withTempDir } from "./helpers.js";
 
@@ -103,5 +103,33 @@ Deno.test("rdf: ID values with quotes cannot inject JSONata", async () => {
     // (The subject IRI itself is not valid Turtle here — IRI character
     // validation is a separate concern — so assert on the text.)
     assertEquals(text.match(/"Mallory"/g)?.length, 1);
+  });
+});
+
+Deno.test("rdf: backtick in the ID column name throws a clear error", async () => {
+  await withTempDir(async (dir) => {
+    const profile = `${dir}/p.yaml`;
+    await Deno.writeTextFile(
+      profile,
+      [
+        "base: http://example.org/data/",
+        "data:",
+        '  - "id`x": 1',
+        "    name: Alice",
+        "descriptions:",
+        "  person:",
+        "    id:",
+        '      mapping: { source: data, path: "id`x" }',
+        "    statements:",
+        "      name:",
+        "        property: foaf:name",
+        "        mapping: { source: data, path: name }",
+      ].join("\n"),
+    );
+    await assertRejects(
+      () => quietly(() => generateRDF(profile, { output: `${dir}/out.ttl` })),
+      Error,
+      "id`x",
+    );
   });
 });
