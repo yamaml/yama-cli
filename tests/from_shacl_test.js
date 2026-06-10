@@ -64,7 +64,7 @@ ex1:Library a sh:NodeShape ;
 
 // ── Constraint imports ────────────────────────────────────────────
 
-Deno.test("from-shacl: exclusive facets, lengths, languageIn, hasValue import", () => {
+Deno.test("from-shacl: exclusive facets, lengths, languageIn, hasValue import", async () => {
   const ttl = `${PREAMBLE}
 ex1:Item a sh:NodeShape ;
   sh:property [
@@ -83,7 +83,7 @@ ex1:Item a sh:NodeShape ;
     sh:hasValue "All rights reserved"
   ] .
 `;
-  const doc = parseShaclToYama(ttl);
+  const doc = await parseShaclToYama(ttl);
   const stmts = doc.descriptions.Item.statements;
   const extent = Object.values(stmts).find((s) => s.property === "dcterms:extent");
   assertEquals(extent.facets, {
@@ -98,7 +98,7 @@ ex1:Item a sh:NodeShape ;
   assertEquals(rights.values, ["All rights reserved"]);
 });
 
-Deno.test("from-shacl: sh:in IRI members import as CURIEs", () => {
+Deno.test("from-shacl: sh:in IRI members import as CURIEs", async () => {
   const ttl = `${PREAMBLE}
 ex1:Item a sh:NodeShape ;
   sh:property [
@@ -107,7 +107,7 @@ ex1:Item a sh:NodeShape ;
     sh:in ( <http://creativecommons.org/licenses/by/4.0/> ex1:custom )
   ] .
 `;
-  const doc = parseShaclToYama(ttl);
+  const doc = await parseShaclToYama(ttl);
   const stmt = Object.values(doc.descriptions.Item.statements)[0];
   assertEquals(stmt.type, "IRI");
   assertEquals(stmt.values, [
@@ -126,7 +126,7 @@ Deno.test("from-shacl: IRI value set round-trips through generateSHACL", async (
       quietly(() => generateSHACL(fixture("kitchen-sink.yaml"), { output: out }))
     );
     const ttl = await Deno.readTextFile(out);
-    const doc = parseShaclToYama(ttl);
+    const doc = await parseShaclToYama(ttl);
     const stmts = doc.descriptions.book.statements;
     const license = Object.values(stmts).find(
       (s) => s.property === "dcterms:license",
@@ -171,7 +171,7 @@ descriptions:
       !ttl.includes("sh:BlankNodeOrIRI"),
       "generator does not loosen BNODE to sh:BlankNodeOrIRI",
     );
-    const doc = parseShaclToYama(ttl);
+    const doc = await parseShaclToYama(ttl);
     const creator = Object.values(doc.descriptions.main.statements).find(
       (s) => s.property === "dcterms:creator",
     );

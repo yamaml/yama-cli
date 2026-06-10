@@ -71,19 +71,23 @@ function isPrefixKnown(prefix, namespaces) {
 /**
  * Checks if a prefixed term uses a known prefix.
  *
- * For DCTAP format, unknown prefixes are downgraded to info (pushed to
- * the `infoArr` array) because DCTAP has no namespace declaration mechanism.
+ * For tabular sources (DCTAP and SimpleDSP), unknown prefixes are
+ * downgraded to info (pushed to the `infoArr` array): DCTAP has no
+ * namespace declaration mechanism at all, and SimpleDSP property
+ * prefixes are already error-checked structurally in phase 1.
  * For other formats, they are errors (pushed to `errorArr`).
  */
 function checkPrefix(term, namespaces, location, fieldName, errorArr, format = "yaml", infoArr = null) {
   const prefix = extractPrefix(term);
   if (prefix && !isPrefixKnown(prefix, namespaces)) {
-    if (format === "dctap" && infoArr) {
+    if ((format === "dctap" || format === "simpledsp") && infoArr) {
       infoArr.push({
         location,
         severity: "info",
         message: `Prefix "${prefix}" in ${fieldName} "${term}" is not a standard prefix`,
-        fix: `DCTAP has no namespace declaration mechanism — prefix resolution depends on external context. Standard prefixes: ${Object.keys(STANDARD_PREFIXES).join(", ")}`,
+        fix: format === "dctap"
+          ? `DCTAP has no namespace declaration mechanism — prefix resolution depends on external context. Standard prefixes: ${Object.keys(STANDARD_PREFIXES).join(", ")}`
+          : `Declare "${prefix}" in the [@NS] block, or use a standard prefix (${Object.keys(STANDARD_PREFIXES).join(", ")})`,
       });
     } else {
       errorArr.push({
@@ -692,7 +696,7 @@ export async function validateFile(filePath, { inputFormat } = {}) {
 
     // Phase 2: semantic (convert to YAMA then validate)
     const doc = simpleDspToYama(blocks, namespaces);
-    const semantic = validateYamaDocument(doc, filePath);
+    const semantic = validateYamaDocument(doc, filePath, "simpledsp");
 
     // Merge results
     return {

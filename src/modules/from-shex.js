@@ -50,6 +50,11 @@
  * names with `-` and `.` (e.g. `bf:title-proper`) and the empty
  * default prefix (`:name`) — not just the `\w` subset.
  *
+ * Triple-constraint lines matching none of the patterns above are not
+ * imported; each dropped line produces a console warning naming the
+ * shape, mirroring how {@link module:from-shacl} reports constructs
+ * it cannot express.
+ *
  * @module from-shex
  * @see https://shex.io
  */
@@ -255,19 +260,21 @@ function parseTripleConstraint(line) {
     rest = disjMatch[2].trim();
   }
   // Multi-datatype disjunction: (xsd:gYear OR xsd:gYearMonth OR xsd:date)
-  // Mirrors what shex.js emits for multi-datatype statements.
-  else if (
-    new RegExp(`^\\(\\s*${PNAME_SRC}(?:\\s+OR\\s+${PNAME_SRC})+\\s*\\)`)
-      .test(rest)
-  ) {
-    const dtMatch = rest.match(/^\(\s*([\w.:\s-]+?)\s*\)(.*)/s);
-    if (dtMatch) {
-      const dts = dtMatch[1].split(/\s+OR\s+/).map((s) => s.trim()).filter(Boolean);
-      if (dts.length > 0) {
-        stmt.datatype = dts.length === 1 ? dts[0] : dts;
-        rest = dtMatch[2].trim();
-      }
-    }
+  // Mirrors what shex.js emits for multi-datatype statements. The
+  // group admits only PNAME tokens separated by OR; a parenthesised
+  // constraint containing anything else is unrecognised, and the whole
+  // line falls through to the dropped-line warning in parseShapes.
+  else if (rest.startsWith("(")) {
+    const dtMatch = rest.match(
+      new RegExp(
+        `^\\(\\s*(${PNAME_SRC}(?:\\s+OR\\s+${PNAME_SRC})+)\\s*\\)(.*)`,
+        "s",
+      ),
+    );
+    if (!dtMatch) return null;
+    const dts = dtMatch[1].split(/\s+OR\s+/).map((s) => s.trim());
+    stmt.datatype = dts.length === 1 ? dts[0] : dts;
+    rest = dtMatch[2].trim();
   }
   // Shape reference: @<shapeName>
   else if (/^@<[^>]+>/.test(rest)) {
@@ -442,8 +449,21 @@ function parseShapes(text, _prefixes, _base) {
     if (/\bCLOSED\b/.test(qualifiers)) desc.closed = true;
 
     for (const constraint of constraints) {
-      const parsed = parseTripleConstraint(constraint.trim());
-      if (!parsed) continue;
+      const line = constraint.trim();
+      const parsed = parseTripleConstraint(line);
+      if (!parsed) {
+        // Mirror from-shacl.js: never drop input silently. Comments
+        // survive splitConstraints when they follow a `;` on the same
+        // line, so they are excluded here.
+        if (line && !line.startsWith("#")) {
+          console.warn(
+            `Warning: shape <${shapeName}>: unrecognised constraint "${
+              line.replace(/\s+/g, " ")
+            }" — dropped.`,
+          );
+        }
+        continue;
+      }
 
       if (parsed._isTypeConstraint) {
         // `a [ClassName]` -> description.a

@@ -10,7 +10,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { parseShExToYama } from "../src/modules/from-shex.js";
 import { generateShEx } from "../src/modules/shex.js";
-import { fixture, quietly, withTempDir } from "./helpers.js";
+import { captureWarnings, fixture, quietly, withTempDir } from "./helpers.js";
 
 // ── CLOSED shapes ─────────────────────────────────────────────────
 
@@ -137,6 +137,55 @@ PREFIX ex: <http://example.org/vocab#>
   const doc = parseShExToYama(shex);
   const stmt = Object.values(doc.descriptions.Item.statements)[0];
   assertEquals(stmt.pattern, "^[A-Z]+$");
+});
+
+// ── Datatype disjunctions ─────────────────────────────────────────
+
+Deno.test("from-shex: garbage tokens in a datatype disjunction are not imported", async () => {
+  const shex = `
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+<Book> {
+  dcterms:date (xsd:gYear fakeword OR xsd:date) ;
+  dcterms:issued (xsd:gYear OR xsd:date)
+}
+`;
+  const { result: doc } = await captureWarnings(() => parseShExToYama(shex));
+  const stmts = Object.values(doc.descriptions.Book.statements);
+  assert(
+    !stmts.some((s) => JSON.stringify(s.datatype ?? "").includes("fakeword")),
+    "garbage token must not be imported as a datatype",
+  );
+  const issued = stmts.find((s) => s.property === "dcterms:issued");
+  assertEquals(
+    issued.datatype,
+    ["xsd:gYear", "xsd:date"],
+    "a valid PNAME disjunction still imports",
+  );
+});
+
+// ── Unrecognised constraint lines ─────────────────────────────────
+
+Deno.test("from-shex: unrecognised constraint lines warn instead of vanishing", async () => {
+  const shex = `
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+<Book> {
+  dcterms:title LITERAL ;
+  $totally not shex$
+}
+`;
+  const { result: doc, warnings } = await captureWarnings(
+    () => parseShExToYama(shex),
+  );
+  assert(doc.descriptions.Book.statements, "valid statements still import");
+  assert(
+    warnings.some((w) =>
+      w.includes("<Book>") && w.includes("$totally not shex$")
+    ),
+    "dropped line is reported with its shape",
+  );
 });
 
 // ── Round-trip with the project's own emitter ─────────────────────

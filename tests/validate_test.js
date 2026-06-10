@@ -218,6 +218,24 @@ Deno.test("validate: numeric DCTAP cells do not crash boolean checks", () => {
 
 // ── SimpleDSP ─────────────────────────────────────────────────────
 
+Deno.test("validate: undeclared SimpleDSP prefix is info, matching the DCTAP path", async () => {
+  // simpledsp-undeclared-prefix.tsv carries "myns:custom" as a literal
+  // datatype constraint without declaring "myns" in [@NS].
+  const dsp = await validateFile(fixture("simpledsp-undeclared-prefix.tsv"));
+  const dspDiag = dsp.info.find((d) => d.message.includes('"myns"'));
+  assert(dspDiag, "undeclared prefix surfaces in info");
+  assert(
+    !errorMessages(dsp).includes('"myns"'),
+    "no error-level duplicate for the same prefix",
+  );
+
+  // The DCTAP path is the severity reference: same prefix, same class.
+  const tap = await validateFile(fixture("dctap-undeclared-prefix.csv"));
+  const tapDiag = tap.info.find((d) => d.message.includes('"myns"'));
+  assert(tapDiag, "DCTAP control case reports the same prefix");
+  assertEquals(dspDiag.severity, tapDiag.severity);
+});
+
 Deno.test("validate: 参照値(URI) accepted, real line numbers reported", async () => {
   const report = await validateFile(fixture("simpledsp-jp-types.tsv"));
   const msgs = errorMessages(report);

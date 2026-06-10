@@ -354,26 +354,28 @@ function warnUnsupported(index, subject, terms, context) {
  * Parses SHACL Turtle input and builds a YAMA document.
  *
  * @param {string} turtleText - SHACL Turtle content.
- * @returns {Object} YAMA document with namespaces, base, and descriptions.
+ * @returns {Promise<Object>} YAMA document with namespaces, base, and descriptions.
  */
-function parseShaclToYama(turtleText) {
+async function parseShaclToYama(turtleText) {
+  // Collect quads and prefixes in a single pass using the documented
+  // N3 callback form: the callback fires once per quad, then one
+  // final time with a null quad and the accumulated prefix map.
   const parser = new N3.Parser();
-  const quads = parser.parse(turtleText);
-  const index = buildIndex(quads);
-
-  // Extract prefixes from the parser
-  const parsedPrefixes = {};
-  // N3 Parser stores prefixes internally; re-parse to get them
-  const prefixParser = new N3.Parser();
-  prefixParser.parse(turtleText, null, (prefix, ns) => {
-    if (prefix && ns) {
-      parsedPrefixes[prefix] = ns.value || ns;
-    }
+  const quads = [];
+  const parsedPrefixes = await new Promise((resolve, reject) => {
+    parser.parse(turtleText, (error, quad, prefixes) => {
+      if (error) reject(error);
+      else if (quad) quads.push(quad);
+      else resolve(prefixes ?? {});
+    });
   });
+  const index = buildIndex(quads);
 
   // Build namespace map, excluding SHACL and RDF (internal plumbing)
   const namespaces = {};
-  for (const [prefix, uri] of Object.entries(parsedPrefixes)) {
+  for (const [prefix, ns] of Object.entries(parsedPrefixes)) {
+    if (!prefix || !ns) continue;
+    const uri = ns.value || ns;
     if (uri !== SH && uri !== RDF) {
       namespaces[prefix] = uri;
     }
@@ -641,7 +643,7 @@ function parseShaclToYama(turtleText) {
  */
 export async function importSHACL(file, output) {
   const turtleText = await readInput(file);
-  const doc = parseShaclToYama(turtleText);
+  const doc = await parseShaclToYama(turtleText);
   const yaml = stringifyYaml(doc, { lineWidth: -1 });
 
   if (output) {
