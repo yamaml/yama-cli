@@ -49,7 +49,7 @@ export const PDF_PADDING = 24;
  * const pdf = await svgToPdf(svgString);
  * await Deno.writeFile("diagram.pdf", pdf);
  */
-export async function svgToPdf(svgString) {
+export function svgToPdf(svgString) {
   const { width, height } = readSvgDimensions(svgString);
   const pageWidth = width + PDF_PADDING * 2;
   const pageHeight = height + PDF_PADDING * 2;

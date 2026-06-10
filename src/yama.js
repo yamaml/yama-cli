@@ -124,7 +124,7 @@ Examples:
 
 Usage: yama package -i <file> -o <directory/>
 
-Generates 14 artifacts: HTML report, Markdown, YAML, JSON, SimpleDSP (EN+JP), DCTAP, SHACL, ShEx, OWL-DSP, diagrams (overview+detail), Data Package.
+Generates 15 artifacts: HTML report, Markdown, README, YAML, JSON, SimpleDSP (EN+JP), DCTAP, SHACL, ShEx, OWL-DSP, diagrams (overview SVG+PDF, detail SVG), Data Package.
 
 Options:
   --input-format   Force input format: yaml, simpledsp, or dctap

@@ -86,7 +86,7 @@ yama from-dctap -i profile.csv -o profile.yaml
 | `simpledsp` | Export to SimpleDSP (TSV, CSV, or Excel) |
 | `dctap` | Export to DCTAP (CSV, TSV, or Excel) |
 | `vocab` | Generate an RDF vocabulary/ontology definition |
-| `diagram` | Generate a visual diagram (SVG, PNG, DOT) |
+| `diagram` | Generate a visual diagram (SVG, PDF, PNG, DOT, PS, EPS, JSON) |
 | `datapackage` | Generate a Frictionless Data Package descriptor |
 | `json` | Convert to JSON |
 
@@ -103,7 +103,7 @@ yama from-dctap -i profile.csv -o profile.yaml
 
 | Command | Description |
 |---------|-------------|
-| `render` | Render a DOT file to SVG/PNG (no Graphviz needed) |
+| `render` | Render a DOT file to SVG/PDF/PNG (no Graphviz needed) |
 
 ## Options
 
@@ -157,7 +157,8 @@ Exit codes: `0` = valid, `1` = errors found.
 ### Documentation & Packaging
 
 ```bash
-# Standalone HTML documentation with embedded diagram
+# Standalone HTML documentation with embedded diagram and inline styles
+# (single file, no CDN or network dependency)
 yama report -i profile.yaml -o profile.html
 
 # Markdown documentation
@@ -167,11 +168,11 @@ yama report -i profile.yaml -o profile.md
 yama report -i profile.tsv -o profile.html
 yama report -i dctap.csv -o profile.html --input-format dctap
 
-# Full package (14 artifacts in a folder)
+# Full package (15 artifacts in a folder)
 yama package -i profile.yaml -o my-profile/
 ```
 
-The package command generates: `index.html`, `profile.md`, `README.md`, `profile.yaml`, `profile.json`, `simpledsp.tsv`, `simpledsp-jp.tsv`, `dctap.csv`, `shacl.ttl`, `shex.shex`, `owl-dsp.ttl`, `diagram.svg`, `diagram-detail.svg`, `datapackage.json`.
+The package command generates: `index.html`, `profile.md`, `README.md`, `profile.yaml`, `profile.json`, `simpledsp.tsv`, `simpledsp-jp.tsv`, `dctap.csv`, `shacl.ttl`, `shex.shex`, `owl-dsp.ttl`, `diagram.svg`, `diagram-detail.svg`, `diagram.pdf`, `datapackage.json`.
 
 ### Format Conversion
 
@@ -220,6 +221,9 @@ yama rdf -i profile.yaml -f jsonld -o data.jsonld
 # SVG diagram
 yama diagram -i profile.yaml -o diagram.svg
 
+# Vector PDF (selectable text, LaTeX-friendly)
+yama diagram -i profile.yaml -o diagram.pdf
+
 # PNG (4800px width)
 yama diagram -i profile.yaml -o diagram.png
 
@@ -263,6 +267,15 @@ yama report --help         # Also works
 yama --help                # Main help with examples
 ```
 
+## Development
+
+Run the regression test suite (validators, importers, generators, and
+end-to-end CLI behaviour):
+
+```bash
+deno task test
+```
+
 ## Compile to a Standalone Binary
 
 For air-gapped environments or distribution without a Deno runtime:
@@ -300,10 +313,10 @@ deno task compile
 | RDF Data | `rdf` | `.ttl`, `.jsonld`, `.nt`, `.nq` |
 | HTML Report | `report` | `.html` |
 | Markdown Report | `report` | `.md` |
-| Diagram | `diagram` | `.svg`, `.png`, `.dot` |
+| Diagram | `diagram` | `.svg`, `.pdf`, `.png`, `.dot`, `.ps`, `.eps`, `.json` |
 | Data Package | `datapackage` | `.json` |
 | JSON | `json` | `.json` |
-| Full Package | `package` | directory with 14 files |
+| Full Package | `package` | directory with 15 files |
 
 ## SimpleDSP
 
@@ -328,7 +341,7 @@ The `diagram` command generates visual representations using a built-in layout e
 | `overview` | Simplified connection graph |
 | `overview-bw` | Simplified connection graph in black and white |
 
-Output formats: SVG, PNG (4800px width), DOT, PostScript, EPS, JSON.
+Output formats: SVG, PDF (vector, selectable text), PNG (4800px width), DOT, PostScript, EPS, JSON.
 
 ## Data Mapping
 
