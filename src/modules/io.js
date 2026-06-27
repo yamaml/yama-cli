@@ -142,3 +142,58 @@ export function datatypes(stmtDef) {
   }
   return [];
 }
+
+/**
+ * Normalises a YAMAML statement's `type` (value node kind) field into an
+ * array of canonical YAMA tokens (`IRI`, `literal`, `BNODE`).
+ *
+ * DCTAP and the DCMI SRAP profile allow multiple node kinds in one cell
+ * (e.g. `IRI BNODE`, `IRI literal`), and Tapir emits the field as a YAML
+ * sequence for such statements. YAMAML therefore accepts `type` as:
+ *   - a scalar string (legacy single-kind YAML),
+ *   - a space-separated string (DCTAP idiom imported verbatim),
+ *   - a sequence of strings (the canonical multi-kind YAML shape).
+ *
+ * Each token is canonicalised case-insensitively (`URI`→`IRI`); unknown
+ * tokens are dropped and duplicates removed, preserving first-seen
+ * order. Empty when none recognised.
+ *
+ * @param {{ type?: string | string[] | null | undefined }} stmtDef
+ * @returns {string[]} Canonical YAMA type tokens.
+ */
+export function nodeTypes(stmtDef) {
+  const t = stmtDef?.type;
+  if (!t) return [];
+  const raw = Array.isArray(t)
+    ? t.filter((x) => typeof x === "string").flatMap((x) => x.split(/\s+/))
+    : typeof t === "string"
+    ? t.split(/\s+/)
+    : [];
+  const out = [];
+  for (const tok of raw) {
+    const upper = tok.trim().toUpperCase();
+    let canonical;
+    if (upper === "IRI" || upper === "URI") canonical = "IRI";
+    else if (upper === "LITERAL") canonical = "literal";
+    else if (upper === "BNODE") canonical = "BNODE";
+    else continue;
+    if (!out.includes(canonical)) out.push(canonical);
+  }
+  return out;
+}
+
+/**
+ * Returns the single representative node type for formats that cannot
+ * express alternatives (Frictionless, diagram labels, SimpleDSP). Picks
+ * IRI over literal over BNODE; empty string when none.
+ *
+ * @param {{ type?: string | string[] | null | undefined }} stmtDef
+ * @returns {string}
+ */
+export function primaryNodeType(stmtDef) {
+  const types = nodeTypes(stmtDef);
+  for (const pref of ["IRI", "literal", "BNODE"]) {
+    if (types.includes(pref)) return pref;
+  }
+  return "";
+}

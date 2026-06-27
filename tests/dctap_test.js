@@ -279,3 +279,60 @@ Deno.test("dctap: empty shapes keep the existing header-row behaviour", () => {
   assertEquals(doc.descriptions.empty.label, "Empty");
   assertEquals(doc.descriptions.empty.note, "n");
 });
+
+// ── Multi-node-kind valueNodeType (DCMI SRAP "IRI BNODE") ──────────
+
+Deno.test("dctap: multi-token valueNodeType keeps every node kind on import", () => {
+  const doc = rowsToYama([
+    { shapeID: "S", propertyID: "dct:creator", valueNodeType: "IRI BNODE" },
+    { shapeID: "S", propertyID: "dct:subject", valueNodeType: "IRI literal" },
+    { shapeID: "S", propertyID: "dct:title", valueNodeType: "literal" },
+  ]);
+  const stmts = doc.descriptions.S.statements;
+  // Multiple kinds → array; single kind → scalar (YAMA scalar-or-array).
+  assertEquals(stmts.creator.type, ["IRI", "BNODE"]);
+  assertEquals(stmts.subject.type, ["IRI", "literal"]);
+  assertEquals(stmts.title.type, "literal");
+});
+
+Deno.test("dctap: multi-node-kind round-trips through export", async () => {
+  await withTempDir(async (dir) => {
+    const profile = await writeProfile(dir, [
+      "base: http://example.org/ap#",
+      "descriptions:",
+      "  S:",
+      "    statements:",
+      "      creator:",
+      "        property: dct:creator",
+      "        type: [IRI, BNODE]",
+    ]);
+    const { rows } = await exportRows(profile);
+    // Canonical DCTAP casing: IRI uppercase, bnode lowercase.
+    assertEquals(rows[0].valueNodeType, "IRI bnode");
+  });
+});
+
+Deno.test("dctap: SHACL emits sh:or of sh:nodeKind for multiple kinds", async () => {
+  await withTempDir(async (dir) => {
+    const profile = await writeProfile(dir, [
+      "base: http://example.org/ap#",
+      "descriptions:",
+      "  S:",
+      "    statements:",
+      "      creator:",
+      "        property: dct:creator",
+      "        type: [IRI, BNODE]",
+    ]);
+    const out = `${dir}/out.ttl`;
+    await quietly(() => generateSHACL(profile, { output: out }));
+    const ttl = await Deno.readTextFile(out);
+    const store = await parseTurtle(ttl);
+    const SH = "http://www.w3.org/ns/shacl#";
+    const orQuads = store.getQuads(null, `${SH}or`, null, null);
+    assert(orQuads.length === 1, "exactly one sh:or list head");
+    const nodeKinds = store.getQuads(null, `${SH}nodeKind`, null, null);
+    const kindIris = nodeKinds.map((q) => q.object.value);
+    assert(kindIris.includes(`${SH}IRI`), "IRI node kind present");
+    assert(kindIris.includes(`${SH}BlankNode`), "BlankNode node kind present");
+  });
+});

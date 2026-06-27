@@ -47,7 +47,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { datatypes, descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, nodeTypes, readInput } from "./io.js";
 import {
   buildRdfList,
   collectUsedStandardPrefixes,
@@ -212,11 +212,24 @@ function buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads
     quads.push(quad(propNode, SH_OR, listHead));
   }
 
-  // sh:nodeKind (only when no datatype — datatype already implies Literal)
+  // sh:nodeKind (only when no datatype — datatype already implies
+  // Literal). DCTAP/SRAP allow multiple node kinds (e.g. "IRI BNODE");
+  // a single kind emits a flat sh:nodeKind, multiple kinds become a
+  // sh:or of nested [sh:nodeKind X] blank nodes.
   if (dts.length === 0) {
-    const nodeKind = resolveNodeKind(stmtDef.type);
-    if (nodeKind) {
-      quads.push(quad(propNode, SH_NODE_KIND, nodeKind));
+    const kinds = nodeTypes(stmtDef)
+      .map(resolveNodeKind)
+      .filter((nk) => nk !== null);
+    if (kinds.length === 1) {
+      quads.push(quad(propNode, SH_NODE_KIND, kinds[0]));
+    } else if (kinds.length > 1) {
+      const nkAnons = kinds.map((nk) => {
+        const anon = blankNode();
+        quads.push(quad(anon, SH_NODE_KIND, nk));
+        return anon;
+      });
+      const listHead = buildRdfList(nkAnons, quads);
+      quads.push(quad(propNode, SH_OR, listHead));
     }
   }
 
@@ -316,8 +329,7 @@ function buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads
     const schemes = (Array.isArray(stmtDef.inScheme)
       ? stmtDef.inScheme
       : [stmtDef.inScheme]).map(normalizeScheme);
-    const stmtType = (stmtDef.type || "").toUpperCase();
-    if (stmtType !== "IRI" && stmtType !== "URI") {
+    if (!nodeTypes(stmtDef).includes("IRI")) {
       console.warn(
         `Warning: statement "${stmtKey}": inScheme on a non-IRI statement cannot be expressed in SHACL — dropped.`,
       );
@@ -345,8 +357,7 @@ function buildPropertyShape(shapeNode, stmtKey, stmtDef, namespaces, base, quads
   // get string literals. An IRI node can never equal a string literal,
   // so emitting literals for IRI values would be unsatisfiable.
   if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
-    const stmtType = (stmtDef.type || "").toUpperCase();
-    const isIriType = stmtType === "IRI" || stmtType === "URI";
+    const isIriType = nodeTypes(stmtDef).includes("IRI");
     const items = [];
     for (const v of stmtDef.values) {
       if (isIriType) {

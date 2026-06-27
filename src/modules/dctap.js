@@ -49,7 +49,7 @@
 import { parse as parseCsv, stringify as stringifyCsv } from "@std/csv";
 import { parse as parseYaml, stringify as stringifyYaml } from "@std/yaml";
 import * as XLSX from "xlsx";
-import { readInput, readInputBytes, statusLog, writeStdoutSync } from "./io.js";
+import { nodeTypes, readInput, readInputBytes, statusLog, writeStdoutSync } from "./io.js";
 import { normalizeScheme } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
@@ -194,24 +194,19 @@ function toRepeatable(max, min) {
 }
 
 /**
- * Resolves DCTAP valueNodeType from YAMA statement type.
+ * Resolves the DCTAP valueNodeType cell from a YAMA statement type.
  *
- * @param {string|undefined} type
+ * Accepts a scalar, a space-separated string, or an array (multi node
+ * kind, e.g. "IRI BNODE"). Tokens are canonicalised — `IRI` uppercase,
+ * `literal`/`bnode` lowercase, matching DCTAP examples — and joined.
+ *
+ * @param {string|string[]|undefined} type
  * @returns {string}
  */
 function toValueNodeType(type) {
-  if (!type) return "";
-  switch (type.toUpperCase()) {
-    case "IRI":
-    case "URI":
-      return "IRI";
-    case "LITERAL":
-      return "literal";
-    case "BNODE":
-      return "bnode";
-    default:
-      return "";
-  }
+  // Reuse the shared normaliser (it reads `.type` off an object).
+  const kinds = nodeTypes({ type });
+  return kinds.map((k) => (k === "IRI" ? "IRI" : k.toLowerCase())).join(" ");
 }
 
 /**
@@ -459,25 +454,40 @@ function parseBool(val) {
 }
 
 /**
- * Resolves YAMA type from DCTAP valueNodeType.
+ * Resolves the YAMA `type` from a DCTAP valueNodeType cell.
+ *
+ * DCTAP (per the DCMI SRAP convention) allows multiple node kinds in
+ * one cell (e.g. "IRI BNODE"). All recognised tokens are kept: a single
+ * kind returns a scalar string, multiple kinds return an array (the
+ * YAMA scalar-or-array `type` shape). `URI` normalises to `IRI`;
+ * unknown tokens and duplicates are dropped.
  *
  * @param {string} nodeType
- * @returns {string|undefined}
+ * @returns {string|string[]|undefined}
  */
 function fromValueNodeType(nodeType) {
   if (!nodeType) return undefined;
-  const parts = String(nodeType).trim().split(/\s+/);
-  switch (parts[0].toUpperCase()) {
-    case "IRI":
-    case "URI":
-      return "IRI";
-    case "LITERAL":
-      return "literal";
-    case "BNODE":
-      return "BNODE";
-    default:
-      return undefined;
+  const out = [];
+  for (const part of String(nodeType).trim().split(/\s+/).filter(Boolean)) {
+    let canonical;
+    switch (part.toUpperCase()) {
+      case "IRI":
+      case "URI":
+        canonical = "IRI";
+        break;
+      case "LITERAL":
+        canonical = "literal";
+        break;
+      case "BNODE":
+        canonical = "BNODE";
+        break;
+      default:
+        continue;
+    }
+    if (!out.includes(canonical)) out.push(canonical);
   }
+  if (out.length === 0) return undefined;
+  return out.length === 1 ? out[0] : out;
 }
 
 /**

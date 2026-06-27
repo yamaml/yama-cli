@@ -58,6 +58,7 @@ import { serializeRdf } from "./serialize.js";
 import {
   datatypes,
   descRefs,
+  primaryNodeType,
   readInput,
   readInputBytes,
   statusLog,
@@ -138,9 +139,11 @@ function resolveSimpleDspValueType(stmtDef) {
   if (descRefs(stmtDef).length > 0) return "structured";
   // Structured with class constraint (e.g. foaf:Agent) — per spec Table 17
   if (stmtDef.a) return "structured";
-  const type = (stmtDef.type || "").toUpperCase();
-  if (type === "IRI" || type === "URI") return "IRI";
-  if (type === "LITERAL" || stmtDef.datatype || Array.isArray(stmtDef.values)) {
+  // SimpleDSP shows a single value type per row; a multi-kind statement
+  // collapses to its dominant kind (IRI over literal).
+  const type = primaryNodeType(stmtDef);
+  if (type === "IRI") return "IRI";
+  if (type === "literal" || stmtDef.datatype || Array.isArray(stmtDef.values)) {
     return "literal";
   }
   return "";
@@ -222,8 +225,7 @@ function resolveSimpleDspConstraint(stmtDef, stmtName, firstDescName) {
 
   // Value set — for literal type, quote values; for reference type, don't
   if (Array.isArray(stmtDef.values) && stmtDef.values.length > 0) {
-    const type = (stmtDef.type || "").toUpperCase();
-    if (type === "IRI" || type === "URI") {
+    if (primaryNodeType(stmtDef) === "IRI") {
       // Reference URIs are unquoted (per spec Table 18)
       return stmtDef.values.join(" ");
     }
@@ -989,7 +991,7 @@ function buildStatementTemplate(
     quads.push(quad(unionAnon, namedNode(`${OWL}unionOf`), listHead));
     quads.push(quad(stmtNode, OWL_ON_DATA_RANGE, unionAnon));
   } else if (
-    (stmtDef.type || "").toUpperCase() === "LITERAL" &&
+    primaryNodeType(stmtDef) === "literal" &&
     !(Array.isArray(stmtDef.values) && stmtDef.values.length > 0)
   ) {
     // Unconstrained literal — SimpleDSP Table 16 maps an empty
@@ -1063,8 +1065,7 @@ function buildStatementTemplate(
     stmtDef.values.length > 0 &&
     !stmtDef.inScheme
   ) {
-    const type = (stmtDef.type || "").toUpperCase();
-    if (type === "IRI" || type === "URI") {
+    if (primaryNodeType(stmtDef) === "IRI") {
       // Reference specific URIs → owl:onClass [owl:oneOf (expanded URIs)]
       const items = stmtDef.values.map((v) =>
         namedNode(expandPrefixed(String(v), namespaces, base)),

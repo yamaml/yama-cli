@@ -271,22 +271,32 @@ export function validateYamaDocument(doc, filePath, sourceFormat = "yaml") {
         checkPrefix(stmtDef.property, namespaces, { path: `${stmtPath}.property` }, "property", errors, sourceFormat, info);
       }
 
-      // Type validation — coerce first: YAML happily parses
-      // `type: true` as a boolean, and .toLowerCase() on a non-string
-      // must not crash the validator.
-      const typeStr = stmtDef.type != null ? String(stmtDef.type) : "";
-      if (typeStr && !YAMA_TYPES.has(typeStr.toLowerCase())) {
-        errors.push(msg("error",
-          `Invalid type "${typeStr}" in statement "${stmtKey}"`,
-          "Type must be one of: literal, IRI, URI, BNODE, or omitted",
-          { path: `${stmtPath}.type` }));
+      // Type validation. `type` may be a scalar, a space-separated
+      // string, or a sequence (DCTAP/SRAP multi-node-kind, e.g.
+      // `[IRI, BNODE]`). Each token must be a valid YAMA type. Coerce
+      // defensively: YAML happily parses `type: true` as a boolean.
+      const rawTypeTokens =
+        stmtDef.type == null
+          ? []
+          : (Array.isArray(stmtDef.type) ? stmtDef.type : [stmtDef.type])
+            .flatMap((t) => String(t).split(/\s+/))
+            .map((t) => t.trim())
+            .filter(Boolean);
+      for (const tok of rawTypeTokens) {
+        if (!YAMA_TYPES.has(tok.toLowerCase())) {
+          errors.push(msg("error",
+            `Invalid type "${tok}" in statement "${stmtKey}"`,
+            "Type must be one of: literal, IRI, URI, BNODE, or omitted",
+            { path: `${stmtPath}.type` }));
+        }
       }
 
       const stmtRefs = descRefs(stmtDef);
+      const typeTokensLower = rawTypeTokens.map((t) => t.toLowerCase());
 
       // §4.2: BNODE must be combined with description — without one
       // there is nothing to define the blank node's structure.
-      if (typeStr.toLowerCase() === "bnode" && stmtRefs.length === 0) {
+      if (typeTokensLower.includes("bnode") && stmtRefs.length === 0) {
         errors.push(msg("error",
           `Statement "${stmtKey}" has type BNODE but no description reference`,
           "Per spec §4.2, BNODE must be combined with 'description' to define the blank node's structure",
@@ -373,11 +383,12 @@ export function validateYamaDocument(doc, filePath, sourceFormat = "yaml") {
         }
       }
 
-      // Track value types for summary
-      const typeUpper = typeStr.toUpperCase();
+      // Track value types for summary (dominant kind for multi-kind).
+      const hasIri = typeTokensLower.includes("iri") || typeTokensLower.includes("uri");
+      const hasLiteral = typeTokensLower.includes("literal");
       const vt = stmtRefs.length > 0 ? "structured" :
-        typeUpper === "IRI" || typeUpper === "URI" ? "iri" :
-        stmtDef.datatype || typeStr === "literal" ? "literal" : "unconstrained";
+        hasIri ? "iri" :
+        stmtDef.datatype || hasLiteral ? "literal" : "unconstrained";
       valueTypes[vt] = (valueTypes[vt] || 0) + 1;
     }
 
@@ -587,13 +598,18 @@ export function validateDctapRaw(rows, normaliseRow) {
       continue;
     }
 
-    // valueNodeType check
+    // valueNodeType check. DCTAP (per the DCMI SRAP convention) allows
+    // multiple node kinds in one cell (e.g. "IRI BNODE"); validate each
+    // token, mirroring the valueShape loop below.
     if (row.valueNodeType) {
-      if (!DCTAP_NODE_TYPES.has(String(row.valueNodeType).toLowerCase())) {
-        errors.push(msg("error",
-          `Row ${line}: invalid valueNodeType "${row.valueNodeType}"`,
-          "valueNodeType must be one of: IRI, literal, bnode (case-insensitive)",
-          { line }));
+      const kinds = String(row.valueNodeType).trim().split(/\s+/).filter(Boolean);
+      for (const kind of kinds) {
+        if (!DCTAP_NODE_TYPES.has(kind.toLowerCase())) {
+          errors.push(msg("error",
+            `Row ${line}: invalid valueNodeType "${kind}"`,
+            "valueNodeType must be one of: IRI, literal, bnode (case-insensitive)",
+            { line }));
+        }
       }
     }
 
@@ -627,12 +643,18 @@ export function validateDctapRaw(rows, normaliseRow) {
             { line }));
         }
       }
-      // valueShape with literal nodeType
-      if (row.valueNodeType && String(row.valueNodeType).toLowerCase() === "literal") {
-        warnings.push(msg("warning",
-          `Row ${line}: valueShape used with valueNodeType "literal"`,
-          "valueShape is typically used with IRI or bnode, not literal",
-          { line }));
+      // valueShape with a purely-literal nodeType. A multi-kind cell
+      // like "IRI literal" is fine (valueShape pairs with the IRI part);
+      // only warn when literal is the sole node kind.
+      if (row.valueNodeType) {
+        const kinds = String(row.valueNodeType).trim().split(/\s+/)
+          .map((k) => k.toLowerCase()).filter(Boolean);
+        if (kinds.length > 0 && kinds.every((k) => k === "literal")) {
+          warnings.push(msg("warning",
+            `Row ${line}: valueShape used with valueNodeType "literal"`,
+            "valueShape is typically used with IRI or bnode, not literal",
+            { line }));
+        }
       }
     }
 

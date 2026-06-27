@@ -32,7 +32,7 @@
  */
 
 import { parse as parseYaml } from "@std/yaml";
-import { datatypes, descRefs, readInput, statusLog } from "./io.js";
+import { datatypes, descRefs, nodeTypes, readInput, statusLog } from "./io.js";
 import { normalizeScheme, STANDARD_PREFIXES } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
@@ -240,7 +240,7 @@ function formatNodeConstraint(stmt, ctx) {
     }
   }
   if (Array.isArray(stmt.values) && stmt.values.length > 0) {
-    const isIriType = ["IRI", "URI"].includes((stmt.type || "").toUpperCase());
+    const isIriType = nodeTypes(stmt).includes("IRI");
     for (const v of stmt.values) {
       // Defensive (mirrors shacl.js): an IRI token containing whitespace
       // can never form valid ShExC — warn and skip the member.
@@ -276,14 +276,16 @@ function formatNodeConstraint(stmt, ctx) {
   // tightening it to LITERAL would reject IRI values the profile
   // allows.
   if (groups.length === 0) {
-    const typeMap = {
-      IRI: "IRI",
-      URI: "IRI",
-      LITERAL: "LITERAL",
-      BNODE: "BNODE",
-      NONLITERAL: "NONLITERAL",
-    };
-    const kind = typeMap[(stmt.type || "").toUpperCase()];
+    // Bare node kind(s). DCTAP/SRAP allow multiple kinds: a single kind
+    // is a bare token, multiple kinds become a ShEx disjunction
+    // (`(IRI OR LITERAL)`).
+    const kinds = nodeTypes(stmt).map((t) => t.toUpperCase());
+    const kind =
+      kinds.length === 0
+        ? undefined
+        : kinds.length === 1
+        ? kinds[0]
+        : `(${kinds.join(" OR ")})`;
     if (kind) {
       groups.push(
         facetTokens.length ? `${kind} ${facetTokens.join(" ")}` : kind,

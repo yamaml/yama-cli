@@ -531,8 +531,17 @@ function splitConstraints(body) {
  */
 function parseShExToYama(text) {
   const prefixes = parsePrefixes(text);
-  const base = parseBase(text);
+  let base = parseBase(text);
   const descriptions = parseShapes(text, prefixes, base);
+
+  // The generator emits shape names and @<...> refs as full IRIs with
+  // no BASE directive. Without stripping, description keys would be
+  // full IRIs (e.g. "http://example.org/ap#Person") instead of local
+  // names. Derive a common base from the shape IRIs (when none was
+  // declared) and strip it from both keys and refs so the import
+  // round-trips to clean local names.
+  if (!base) base = deriveCommonBase(Object.keys(descriptions));
+  const stripped = base ? stripBaseFromShapes(descriptions, base) : descriptions;
 
   const doc = {};
   if (base) doc.base = base;
@@ -544,8 +553,51 @@ function parseShExToYama(text) {
   }
   if (Object.keys(namespaces).length > 0) doc.namespaces = namespaces;
 
-  doc.descriptions = descriptions;
+  doc.descriptions = stripped;
   return doc;
+}
+
+/**
+ * Derives a common base IRI shared by every shape name, up to the last
+ * `/` or `#`. Returns "" when the names don't share a prefix (or aren't
+ * IRIs), mirroring from-shacl.js's base derivation.
+ *
+ * @param {string[]} shapeNames - Full shape IRIs (description keys).
+ * @returns {string} The common base, or "".
+ */
+function deriveCommonBase(shapeNames) {
+  const iris = shapeNames.filter((n) => /^(https?|urn):/.test(n));
+  if (iris.length === 0) return "";
+  const first = iris[0];
+  const lastSep = Math.max(first.lastIndexOf("/"), first.lastIndexOf("#"));
+  if (lastSep <= 0) return "";
+  const candidate = first.slice(0, lastSep + 1);
+  return iris.every((iri) => iri.startsWith(candidate)) ? candidate : "";
+}
+
+/**
+ * Strips a base IRI from description keys and from every `description`
+ * reference that points at a same-base shape, leaving clean local
+ * names. Refs to IRIs outside the base are left untouched.
+ *
+ * @param {Object} descriptions - Map of shape-IRI → description.
+ * @param {string} base - The base IRI to strip.
+ * @returns {Object} A new descriptions map keyed by local name.
+ */
+function stripBaseFromShapes(descriptions, base) {
+  const strip = (iri) =>
+    typeof iri === "string" && iri.startsWith(base) ? iri.slice(base.length) : iri;
+  const out = {};
+  for (const [key, desc] of Object.entries(descriptions)) {
+    for (const stmt of Object.values(desc.statements || {})) {
+      if (stmt.description === undefined) continue;
+      stmt.description = Array.isArray(stmt.description)
+        ? stmt.description.map(strip)
+        : strip(stmt.description);
+    }
+    out[strip(key)] = desc;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

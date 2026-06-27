@@ -216,6 +216,20 @@ Deno.test("validate: numeric DCTAP cells do not crash boolean checks", () => {
   );
 });
 
+Deno.test("validate: multi-token valueNodeType is accepted (DCMI SRAP IRI BNODE)", () => {
+  const rows = [
+    { shapeID: "S", propertyID: "dct:creator", valueNodeType: "IRI BNODE" },
+    { shapeID: "S", propertyID: "dct:subject", valueNodeType: "IRI literal" },
+    // A bad token in a multi-token cell is still caught per-token.
+    { shapeID: "S", propertyID: "dct:bad", valueNodeType: "IRI nope" },
+  ];
+  const { errors } = validateDctapRaw(rows, null);
+  const errText = errors.map((e) => e.message).join("\n");
+  assert(!errText.includes('valueNodeType "IRI BNODE"'), "IRI BNODE accepted");
+  assert(!errText.includes('valueNodeType "IRI literal"'), "IRI literal accepted");
+  assertStringIncludes(errText, 'invalid valueNodeType "nope"');
+});
+
 // ── SimpleDSP ─────────────────────────────────────────────────────
 
 Deno.test("validate: undeclared SimpleDSP prefix is info, matching the DCTAP path", async () => {

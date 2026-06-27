@@ -304,6 +304,23 @@ function fromNodeKind(nodeKindIRI) {
   }
 }
 
+/**
+ * Reverses the generator's anchored-stem sh:pattern back into an
+ * inScheme stem. The generator emits `^${escapeRegex(stem)}`; this
+ * strips the leading `^` and removes the regex backslash escapes.
+ * Returns undefined when the pattern is not an anchored stem.
+ *
+ * @param {string} pattern - The sh:pattern literal value.
+ * @returns {string|undefined}
+ */
+function stemFromPattern(pattern) {
+  if (typeof pattern !== "string" || !pattern.startsWith("^")) return undefined;
+  // Drop the anchor, then unescape `\X` → `X` for the regex metachars
+  // escapeRegex() protected ( . * + ? ^ $ { } ( ) | [ ] \ ).
+  const stem = pattern.slice(1).replace(/\\([.*+?^${}()|[\]\\])/g, "$1");
+  return stem || undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Inexpressible-construct warnings
 // ---------------------------------------------------------------------------
@@ -526,28 +543,59 @@ async function parseShaclToYama(turtleText) {
           stmt.description = refName(nodeRef);
         }
 
-        // sh:or with an RDF list of nested blank nodes can carry
-        // either a multi-shape disjunction (sh:node) or a multi-
-        // datatype union (sh:datatype) — both shapes are emitted by
-        // the shacl.js generator. We import whichever the list
-        // happens to contain.
-        const orHead = getOne(index, propNodeIRI, `${SH}or`);
-        if (orHead) {
-          const entries = walkRdfList(index, orHead);
-          const refs = [];
-          const dts = [];
-          for (const entry of entries) {
+        // sh:or with an RDF list of nested blank nodes carries one of
+        // several disjunctions emitted by the shacl.js generator: a
+        // multi-shape (sh:node), multi-datatype (sh:datatype), multi-
+        // class (sh:class), multi-node-kind (sh:nodeKind), or multi-
+        // scheme (sh:pattern stems). Tapir may also wrap several such
+        // disjunctions under a single sh:and of [sh:or (...)] sub-
+        // shapes; we collect from every sh:or we can reach.
+        const orHeads = [];
+        const directOr = getOne(index, propNodeIRI, `${SH}or`);
+        if (directOr) orHeads.push(directOr);
+        const andHead = getOne(index, propNodeIRI, `${SH}and`);
+        if (andHead) {
+          for (const sub of walkRdfList(index, andHead)) {
+            const subOr = getOne(index, sub, `${SH}or`);
+            if (subOr) orHeads.push(subOr);
+          }
+        }
+
+        const refs = [];
+        const dts = [];
+        const classes = [];
+        const kinds = [];
+        const stems = [];
+        for (const orHead of orHeads) {
+          for (const entry of walkRdfList(index, orHead)) {
             const nestedNode = getOne(index, entry, `${SH}node`);
             if (nestedNode) refs.push(refName(nestedNode));
             const nestedDt = getOne(index, entry, `${SH}datatype`);
             if (nestedDt) dts.push(compactIRI(nestedDt, namespaces, base));
+            const nestedClass = getOne(index, entry, `${SH}class`);
+            if (nestedClass) classes.push(compactIRI(nestedClass, namespaces, base));
+            const nestedKind = getOne(index, entry, `${SH}nodeKind`);
+            const kind = nestedKind && fromNodeKind(nestedKind);
+            if (kind && !kinds.includes(kind)) kinds.push(kind);
+            const nestedPattern = getOne(index, entry, `${SH}pattern`);
+            const stem = nestedPattern && stemFromPattern(nestedPattern);
+            if (stem) stems.push(stem);
           }
-          if (refs.length > 0) {
-            stmt.description = refs.length === 1 ? refs[0] : refs;
-          }
-          if (dts.length > 0) {
-            stmt.datatype = dts.length === 1 ? dts[0] : dts;
-          }
+        }
+        if (refs.length > 0) {
+          stmt.description = refs.length === 1 ? refs[0] : refs;
+        }
+        if (dts.length > 0) {
+          stmt.datatype = dts.length === 1 ? dts[0] : dts;
+        }
+        if (classes.length > 0) {
+          stmt.a = classes.length === 1 ? classes[0] : classes;
+        }
+        if (kinds.length > 0) {
+          stmt.type = kinds.length === 1 ? kinds[0] : kinds;
+        }
+        if (stems.length > 0) {
+          stmt.inScheme = stems.length === 1 ? stems[0] : stems;
         }
 
         // sh:class → a (class constraint on statement)

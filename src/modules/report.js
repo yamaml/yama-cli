@@ -17,7 +17,7 @@
  * @module report
  */
 
-import { datatypes, descRefs } from "./io.js";
+import { datatypes, descRefs, nodeTypes } from "./io.js";
 import { STANDARD_PREFIXES } from "./prefixes.js";
 
 // ---------------------------------------------------------------------------
@@ -143,10 +143,9 @@ function escHtml(s) {
 function resolveType(stmtDef) {
   const dts = datatypes(stmtDef);
   if (dts.length > 0) return dts.join(" ");
-  if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "IRI";
-  if (stmtDef.type === "literal") return "Literal";
-  if (stmtDef.type) return stmtDef.type;
-  return "";
+  // Each node kind to a label, joined for multi-kind statements.
+  const label = { IRI: "IRI", literal: "Literal", BNODE: "bnode" };
+  return nodeTypes(stmtDef).map((k) => label[k] ?? k).join(" / ");
 }
 
 /**

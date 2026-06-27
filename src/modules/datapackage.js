@@ -33,7 +33,7 @@
 
 import { parse as parseYaml } from "@std/yaml";
 import { basename } from "@std/path";
-import { datatypes, readInput, statusLog } from "./io.js";
+import { datatypes, primaryNodeType, readInput, statusLog } from "./io.js";
 
 // ---------------------------------------------------------------------------
 // XSD-to-Frictionless type mapping
@@ -115,8 +115,7 @@ function resolveFieldType(stmtDef, fieldName) {
     return { type: "string" };
   }
 
-  const yamaType = (stmtDef.type || "").toUpperCase();
-  if (yamaType === "IRI" || yamaType === "URI") {
+  if (primaryNodeType(stmtDef) === "IRI") {
     return { type: "string", format: "uri" };
   }
 

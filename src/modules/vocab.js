@@ -20,7 +20,7 @@
 import { parse as parseYaml } from "@std/yaml";
 import N3 from "n3";
 import { serializeRdf } from "./serialize.js";
-import { datatypes, descRefs, readInput } from "./io.js";
+import { datatypes, descRefs, nodeTypes, readInput } from "./io.js";
 import {
   collectUsedStandardPrefixes,
   expandPrefixed,
@@ -64,15 +64,15 @@ const RDFS_RANGE = namedNode(`${RDFS}range`);
  * @returns {"datatype"|"object"|"unknown"}
  */
 function resolvePropertyType(stmtDef) {
-  const type = (stmtDef.type || "").toUpperCase();
+  const kinds = nodeTypes(stmtDef);
 
-  // Explicit IRI/URI type or structured reference → object property
-  if (type === "IRI" || type === "URI") return "object";
+  // Explicit IRI type or structured reference → object property
+  if (kinds.includes("IRI")) return "object";
   if (descRefs(stmtDef).length > 0) return "object";
   if (stmtDef.a) return "object";
 
   // Explicit literal type or datatype → datatype property
-  if (type === "LITERAL") return "datatype";
+  if (kinds.includes("literal")) return "datatype";
   if (stmtDef.datatype) return "datatype";
 
   return "unknown";

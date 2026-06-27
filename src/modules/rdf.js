@@ -18,7 +18,7 @@ import jsonata from "jsonata";
 import N3 from "n3";
 import * as XLSX from "xlsx";
 import { serializeRdf, SUPPORTED_FORMATS } from "./serialize.js";
-import { datatypes, readInput, readInputBytes } from "./io.js";
+import { datatypes, primaryNodeType, readInput, readInputBytes } from "./io.js";
 import {
   collectUsedStandardPrefixes,
   expandPrefixed,
@@ -366,7 +366,9 @@ async function processStatement(subject, stmtDef, idColumn, idValue, ctx, quads)
   if (!property) return;
 
   const predIri = expandPrefixed(property, ctx.namespaces, ctx.base);
-  const stmtType = (stmtDef.type || "literal");
+  // Instance-data generation is one-shot (one concrete value per row),
+  // so a multi-kind statement collapses to its dominant node type.
+  const stmtType = primaryNodeType(stmtDef) || "literal";
   const mapping = mergeMapping(stmtDef.mapping, ctx.defaults);
 
   // Blank node: recurse into referenced description. When multiple

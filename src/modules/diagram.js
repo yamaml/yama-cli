@@ -20,7 +20,7 @@ import { parse as parseYaml } from "@std/yaml";
 import { Graphviz } from "@hpcc-js/wasm-graphviz";
 import { extname } from "@std/path";
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
-import { datatypes, descRefs, readInput, statusLog, writeStdoutSync } from "./io.js";
+import { datatypes, descRefs, nodeTypes, readInput, statusLog, writeStdoutSync } from "./io.js";
 
 // ── Color palette ─────────────────────────────────────────────────
 
@@ -116,9 +116,11 @@ function typeLabel(stmtDef, ns) {
   if (refs.length > 0) return refs.join(" ");
   const dts = datatypes(stmtDef);
   if (dts.length > 0) return dts.map((dt) => compactIRI(dt, ns)).join(" ");
-  if (stmtDef.type === "IRI" || stmtDef.type === "URI") return "URI";
-  if (stmtDef.type === "literal") return "Literal";
-  if (stmtDef.type) return stmtDef.type;
+  const kinds = nodeTypes(stmtDef);
+  if (kinds.length > 0) {
+    const label = { IRI: "URI", literal: "Literal", BNODE: "bnode" };
+    return kinds.map((k) => label[k] ?? k).join(" / ");
+  }
   return "\u00A0";
 }
 

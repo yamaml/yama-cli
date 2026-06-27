@@ -180,6 +180,69 @@ descriptions:
   });
 });
 
+Deno.test("from-shacl: multi-scheme inScheme survives the SHACL round-trip", async () => {
+  const yaml = `base: http://example.org/ap#
+namespaces:
+  loc: http://id.loc.gov/authorities/subjects/
+  getty: http://vocab.getty.edu/aat/
+descriptions:
+  S:
+    statements:
+      subject:
+        property: dcterms:subject
+        type: IRI
+        inScheme: [loc:, getty:]
+`;
+  await withTempDir(async (dir) => {
+    const input = `${dir}/profile.yaml`;
+    const out = `${dir}/shacl.ttl`;
+    await Deno.writeTextFile(input, yaml);
+    await quietly(() => generateSHACL(input, { output: out }));
+    const doc = await parseShaclToYama(await Deno.readTextFile(out));
+    const subject = Object.values(doc.descriptions.S.statements).find(
+      (s) => s.property === "dcterms:subject",
+    );
+    assert(subject, "subject statement re-imported");
+    assert(Array.isArray(subject.inScheme), "inScheme is a multi-value array");
+    assert(
+      subject.inScheme.includes("http://id.loc.gov/authorities/subjects/"),
+      "first scheme survives",
+    );
+    assert(
+      subject.inScheme.includes("http://vocab.getty.edu/aat/"),
+      "second scheme survives",
+    );
+  });
+});
+
+Deno.test("from-shacl: multi-class sh:or imports into statement.a", async () => {
+  const yaml = `base: http://example.org/ap#
+namespaces:
+  foaf: http://xmlns.com/foaf/0.1/
+descriptions:
+  S:
+    statements:
+      creator:
+        property: dcterms:creator
+        type: IRI
+        a: [foaf:Person, foaf:Organization]
+`;
+  await withTempDir(async (dir) => {
+    const input = `${dir}/profile.yaml`;
+    const out = `${dir}/shacl.ttl`;
+    await Deno.writeTextFile(input, yaml);
+    await quietly(() => generateSHACL(input, { output: out }));
+    const doc = await parseShaclToYama(await Deno.readTextFile(out));
+    const creator = Object.values(doc.descriptions.S.statements).find(
+      (s) => s.property === "dcterms:creator",
+    );
+    assert(creator, "creator statement re-imported");
+    assert(Array.isArray(creator.a), "class constraint is a multi-value array");
+    assert(creator.a.includes("foaf:Person"), "first class survives");
+    assert(creator.a.includes("foaf:Organization"), "second class survives");
+  });
+});
+
 // ── Inexpressible constructs warn instead of vanishing ────────────
 
 Deno.test("from-shacl: inexpressible constructs are reported", async () => {

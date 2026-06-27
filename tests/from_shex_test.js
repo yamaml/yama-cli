@@ -94,6 +94,31 @@ PREFIX ex: <http://example.org/vocab#>
   assertEquals(props, ["bf:title-proper", "ex:has.part"]);
 });
 
+Deno.test("from-shex: full-IRI shape names are stripped to local names (no BASE)", () => {
+  // The shex.js generator emits full-IRI shape names and @<...> refs
+  // with no BASE directive. The importer must derive the common base
+  // and strip it so keys/refs become clean local names.
+  const shex = `
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+<http://example.org/ap#Person> {
+  foaf:name LITERAL ;
+  foaf:knows @<http://example.org/ap#Person> *
+}
+`;
+  const doc = parseShExToYama(shex);
+  assertEquals(doc.base, "http://example.org/ap#", "common base recovered");
+  assert(doc.descriptions.Person, "shape key stripped to local name");
+  assert(
+    !doc.descriptions["http://example.org/ap#Person"],
+    "no full-IRI key remains",
+  );
+  const knows = Object.values(doc.descriptions.Person.statements).find(
+    (s) => s.property === "foaf:knows",
+  );
+  assertEquals(knows.description, "Person", "self-reference stripped to local name");
+});
+
 Deno.test("from-shex: empty default prefix is recognised", () => {
   const shex = `
 PREFIX : <http://example.org/default#>
